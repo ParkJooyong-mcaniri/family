@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
-import { Plus, Calendar as CalendarIcon, Check, X, ChevronLeft, ChevronRight, List, Grid3X3, Edit, Trash2, CalendarDays, Clock } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, ChevronLeft, ChevronRight, List, Grid3X3, Edit, Trash2, CalendarDays, Clock } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addDays, subDays, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval as eachDayOfWeek, addWeeks, subWeeks, isSameMonth } from "date-fns";
 import { ko } from "date-fns/locale";
 import { schedulesApi, Schedule, ScheduleCompletion, FAMILY_MEMBERS, FAMILY_MEMBER_LABELS, FAMILY_MEMBER_COLORS, FamilyMember } from "@/lib/supabase-client";
@@ -21,7 +21,7 @@ export default function SchedulePage() {
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // 강제 리렌더링을 위한 키
   const [selectedFamilyMembers, setSelectedFamilyMembers] = useState<FamilyMember[]>(['family']); // 기본값은 가족
@@ -193,7 +193,6 @@ export default function SchedulePage() {
 
   // 우측상단 버튼 클릭 시 오늘 날짜로 폼 초기화
   const handleAddNewSchedule = () => {
-    setSelectedDate(null); // 선택된 날짜 초기화
     resetForm(new Date()); // 오늘 날짜로 설정 (종료일은 자동으로 3개월 후)
     setIsDialogOpen(true);
   };
@@ -424,7 +423,7 @@ export default function SchedulePage() {
         case 'weekly':
           if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
             // weekly_day가 1(월요일)~7(일요일)인 경우와 0(일요일)~6(토요일)인 경우 모두 처리
-            let currentDay = date.getDay(); // 0(일요일) ~ 6(토요일)
+            const currentDay = date.getDay(); // 0(일요일) ~ 6(토요일)
             let scheduleDay = schedule.weekly_day;
             
             // weekly_day가 1~7 범위인 경우 0~6으로 변환
@@ -1369,7 +1368,6 @@ export default function SchedulePage() {
                         }`}
                         onClick={() => {
                           if (isCurrentMonth) {
-                            setSelectedDate(date);
                             resetForm(date); // 선택된 날짜로 폼 초기화
                             setIsDialogOpen(true);
                           }
@@ -1448,7 +1446,6 @@ export default function SchedulePage() {
                       isCurrentDate ? 'bg-blue-50' : ''
                     }`}
                     onClick={() => {
-                      setSelectedDate(date);
                       resetForm(date); // 선택된 날짜로 폼 초기화
                       setIsDialogOpen(true);
                     }}
@@ -1576,7 +1573,6 @@ export default function SchedulePage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => {
-                          setSelectedDate(currentDate);
                           resetForm(currentDate);
                           setIsDialogOpen(true);
                         }}
@@ -1609,7 +1605,7 @@ export default function SchedulePage() {
                 <span className="text-sm text-gray-600">정렬:</span>
                 <Select
                   value={sortBy}
-                  onValueChange={(value: string) => setSortBy(value as any)}
+                  onValueChange={(value: string) => setSortBy(value as typeof sortBy)}
                 >
                   <SelectTrigger className="w-32">
                     <SelectValue />

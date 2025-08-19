@@ -517,8 +517,9 @@ export const schedulesApi = {
       
       // Supabase 오류인지 확인
       if (error && typeof error === 'object' && 'code' in error) {
-        console.error('Supabase 오류 코드:', (error as any).code);
-        console.error('Supabase 오류 메시지:', (error as any).message);
+        const supabaseError = error as { code?: string; message?: string };
+        console.error('Supabase 오류 코드:', supabaseError.code);
+        console.error('Supabase 오류 메시지:', supabaseError.message);
       }
       
       throw error;
