@@ -25,7 +25,7 @@
 
 ## 기술 스택
 
-- **Frontend**: Next.js 14, React, TypeScript
+- **Frontend**: Next.js 15, React 19, TypeScript
 - **UI Components**: ShadCN UI, Tailwind CSS
 - **Icons**: Lucide React
 - **Database**: Supabase (PostgreSQL)
