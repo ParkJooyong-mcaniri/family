@@ -73,6 +73,11 @@ export default function SchedulePage() {
       
       if (viewParam && (viewParam === 'month' || viewParam === 'week' || viewParam === 'day')) {
         setViewMode(viewParam);
+        
+        // 월별 뷰일 때 이번달로 설정
+        if (viewParam === 'month') {
+          setCurrentDate(new Date());
+        }
       }
     }
   }, []);

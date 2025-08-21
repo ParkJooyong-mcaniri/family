@@ -294,30 +294,38 @@ export default function Home() {
 
         {/* Stats */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">{stats.totalFamilyMeals}</div>
-              <div className="text-gray-600">등록된 식단</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-green-600 mb-2">{stats.totalMeals}</div>
-              <div className="text-gray-600">저장된 메뉴</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-2">{stats.totalRecipes}</div>
-              <div className="text-gray-600">레시피</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-orange-600 mb-2">{stats.totalSchedules}</div>
-              <div className="text-gray-600">등록된 일정</div>
-            </CardContent>
-          </Card>
+          <Link href="/family-meals?view=week" className="block">
+            <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-blue-600 mb-2 group-hover:text-blue-700">{stats.totalFamilyMeals}</div>
+                <div className="text-gray-600 group-hover:text-gray-800">등록된 식단</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/meals" className="block">
+            <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-green-600 mb-2 group-hover:text-green-700">{stats.totalMeals}</div>
+                <div className="text-gray-600 group-hover:text-gray-800">저장된 메뉴</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/recipes" className="block">
+            <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-purple-600 mb-2 group-hover:text-purple-700">{stats.totalRecipes}</div>
+                <div className="text-gray-600 group-hover:text-gray-800">레시피</div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/schedule?view=month" className="block">
+            <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group">
+              <CardContent className="p-6 text-center">
+                <div className="text-3xl font-bold text-orange-600 mb-2 group-hover:text-orange-700">{stats.totalSchedules}</div>
+                <div className="text-gray-600 group-hover:text-gray-800">등록된 일정</div>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* 일정 통계 */}

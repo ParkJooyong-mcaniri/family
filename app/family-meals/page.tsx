@@ -42,6 +42,23 @@ export default function FamilyMealsPage() {
     }
   }, [currentDate, viewMode]);
 
+  // URL 쿼리 파라미터 처리
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewParam = urlParams.get('view');
+      
+      if (viewParam && (viewParam === 'month' || viewParam === 'week' || viewParam === 'day')) {
+        setViewMode(viewParam);
+        
+        // 주별 뷰일 때 이번주로 설정
+        if (viewParam === 'week') {
+          setCurrentDate(new Date());
+        }
+      }
+    }
+  }, []);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -796,7 +813,7 @@ export default function FamilyMealsPage() {
         </div>
 
         <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>식단 등록</DialogTitle>
             </DialogHeader>

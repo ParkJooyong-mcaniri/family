@@ -23,9 +23,9 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
 
       img.onload = () => {
         try {
-          // 최대 크기 설정 (예: 800x600)
-          const maxWidth = 800;
-          const maxHeight = 600;
+          // 모바일 환경을 고려한 최적화된 크기 설정
+          const maxWidth = window.innerWidth < 768 ? 600 : 800; // 모바일에서는 더 작게
+          const maxHeight = window.innerWidth < 768 ? 450 : 600;
           
           let { width, height } = img;
           
@@ -42,13 +42,30 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
             }
           }
 
+          // 모바일에서는 더 작은 크기로 조정
+          if (window.innerWidth < 768 && (width > 400 || height > 300)) {
+            if (width > height) {
+              height = (height * 400) / width;
+              width = 400;
+            } else {
+              width = (width * 300) / height;
+              height = 300;
+            }
+          }
+
           canvas.width = width;
           canvas.height = height;
 
           if (ctx) {
+            // 이미지 품질 향상을 위한 설정
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
             ctx.drawImage(img, 0, 0, width, height);
           }
 
+          // 모바일에서는 더 낮은 품질로 압축하여 파일 크기 감소
+          const quality = window.innerWidth < 768 ? 0.7 : 0.8;
+          
           // Canvas를 Blob으로 변환
           canvas.toBlob((blob) => {
             if (blob) {
@@ -60,7 +77,7 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
             } else {
               reject(new Error('이미지 리사이징에 실패했습니다.'));
             }
-          }, 'image/jpeg', 0.8);
+          }, 'image/jpeg', quality);
         } catch (error) {
           reject(error);
         }
@@ -70,6 +87,8 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         reject(new Error('이미지 로드에 실패했습니다.'));
       };
 
+      // 모바일에서 메모리 사용량 최적화
+      img.crossOrigin = 'anonymous';
       img.src = URL.createObjectURL(file);
     });
   };
@@ -97,9 +116,10 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           continue;
         }
 
-        // 파일 크기 검증 (5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          alert('파일 크기는 5MB 이하여야 합니다.');
+        // 파일 크기 검증 (모바일에서는 더 작게)
+        const maxFileSize = window.innerWidth < 768 ? 3 * 1024 * 1024 : 5 * 1024 * 1024; // 모바일: 3MB, 데스크톱: 5MB
+        if (file.size > maxFileSize) {
+          alert(`파일 크기는 ${window.innerWidth < 768 ? '3MB' : '5MB'} 이하여야 합니다.`);
           continue;
         }
 
@@ -125,7 +145,20 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           newImageUrls.push(publicUrl);
         } catch (uploadError) {
           console.error('개별 파일 업로드 실패:', file.name, uploadError);
-          alert(`파일 "${file.name}" 업로드에 실패했습니다: ${uploadError instanceof Error ? uploadError.message : '알 수 없는 오류'}`);
+          
+          // 모바일에서 더 자세한 에러 메시지
+          let errorMessage = '알 수 없는 오류';
+          if (uploadError instanceof Error) {
+            if (uploadError.message.includes('리사이징')) {
+              errorMessage = '이미지 처리 중 오류가 발생했습니다. 다른 이미지를 시도해보세요.';
+            } else if (uploadError.message.includes('업로드')) {
+              errorMessage = '네트워크 연결을 확인하고 다시 시도해보세요.';
+            } else {
+              errorMessage = uploadError.message;
+            }
+          }
+          
+          alert(`파일 "${file.name}" 업로드에 실패했습니다: ${errorMessage}`);
           continue;
         }
       }
@@ -233,8 +266,13 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
               )}
             </Button>
             <p className="text-xs text-gray-500 mt-2">
-              JPG, PNG 파일만 가능 (최대 5MB, 자동 리사이징)
+              {window.innerWidth < 768 ? 'JPG, PNG 파일만 가능 (최대 3MB, 자동 리사이징)' : 'JPG, PNG 파일만 가능 (최대 5MB, 자동 리사이징)'}
             </p>
+            {isUploading && (
+              <div className="mt-2 text-xs text-blue-600">
+                모바일에서 이미지 처리 중... 잠시만 기다려주세요.
+              </div>
+            )}
           </div>
         )}
       </div>

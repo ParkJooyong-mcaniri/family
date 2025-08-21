@@ -161,7 +161,7 @@ export default function MealsPage() {
                   메뉴 추가
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
+              <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingMeal ? "메뉴 수정" : "새 메뉴 추가"}
