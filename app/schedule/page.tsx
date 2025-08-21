@@ -9,16 +9,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
-import { Plus, Calendar as CalendarIcon, ChevronLeft, ChevronRight, List, Grid3X3, Edit, Trash2, CalendarDays, Clock } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, ChevronLeft, ChevronRight, List, Grid3X3, Edit, Trash2, CalendarDays, Clock, ChefHat } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isToday, addDays, subDays, isSameDay, startOfWeek, endOfWeek, eachDayOfInterval as eachDayOfWeek, addWeeks, subWeeks, isSameMonth } from "date-fns";
 import { ko } from "date-fns/locale";
-import { schedulesApi, Schedule, ScheduleCompletion, FAMILY_MEMBERS, FAMILY_MEMBER_LABELS, FAMILY_MEMBER_COLORS, FamilyMember } from "@/lib/supabase-client";
+import { schedulesApi, Schedule, ScheduleCompletion, FAMILY_MEMBERS, FAMILY_MEMBER_LABELS, FAMILY_MEMBER_COLORS, FamilyMember, familyMealsApi, FamilyMeal, testSupabaseConnection } from "@/lib/supabase-client";
+import { useRouter, usePathname } from "next/navigation";
 
 export default function SchedulePage() {
+  const router = useRouter();
+  const pathname = usePathname();
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [completions, setCompletions] = useState<ScheduleCompletion[]>([]);
+  const [familyMeals, setFamilyMeals] = useState<FamilyMeal[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<Schedule | null>(null);
 
@@ -37,6 +41,41 @@ export default function SchedulePage() {
     custom_pattern: "",
     family_members: ['family'] as FamilyMember[],
   });
+
+  // URL 쿼리 파라미터 처리
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+      const viewParam = urlParams.get('view');
+      
+      if (dateParam) {
+        const today = new Date();
+        let targetDate = new Date();
+        
+        switch (dateParam) {
+          case 'yesterday':
+            targetDate = subDays(today, 1);
+            break;
+          case 'today':
+            targetDate = today;
+            break;
+          case 'tomorrow':
+            targetDate = addDays(today, 1);
+            break;
+          default:
+            // 기본값은 오늘
+            targetDate = today;
+        }
+        
+        setCurrentDate(targetDate);
+      }
+      
+      if (viewParam && (viewParam === 'month' || viewParam === 'week' || viewParam === 'day')) {
+        setViewMode(viewParam);
+      }
+    }
+  }, []);
 
   // 데이터 로드
   useEffect(() => {
@@ -143,6 +182,109 @@ export default function SchedulePage() {
   };
 
   // 데이터 로드 (일정만, 406 오류 방지)
+  const loadFamilyMeals = async () => {
+    try {
+      let startDate: string, endDate: string;
+      
+      if (viewMode === 'month') {
+        const start = startOfMonth(currentDate);
+        const end = endOfMonth(currentDate);
+        startDate = format(start, 'yyyy-MM-dd');
+        endDate = format(end, 'yyyy-MM-dd');
+      } else if (viewMode === 'week') {
+        const start = startOfWeek(currentDate, { weekStartsOn: 1 });
+        const end = endOfWeek(currentDate, { weekStartsOn: 1 });
+        startDate = format(start, 'yyyy-MM-dd');
+        endDate = format(end, 'yyyy-MM-dd');
+      } else {
+        // 일별 뷰
+        startDate = format(currentDate, 'yyyy-MM-dd');
+        endDate = format(currentDate, 'yyyy-MM-dd');
+      }
+      
+      console.log('가족식단 로드 시작:', { startDate, endDate, currentDate: currentDate.toISOString() });
+      
+      // Supabase 연결 테스트 먼저 실행
+      console.log('Supabase 연결 테스트 시작...');
+      const connectionTest = await testSupabaseConnection();
+      console.log('Supabase 연결 테스트 결과:', connectionTest);
+      
+      if (!connectionTest) {
+        console.error('Supabase 연결 실패 - 가족식단 로드 중단');
+        setFamilyMeals([]);
+        return;
+      }
+      
+      const meals = await familyMealsApi.getByMonth(
+        new Date(startDate).getFullYear(),
+        new Date(startDate).getMonth() + 1
+      );
+      
+      console.log('가족식단 API 응답:', { mealsCount: meals?.length || 0, meals });
+      
+      // 현재 기간에 해당하는 식단만 필터링
+      const filteredMeals = meals.filter(meal => 
+        meal.date >= startDate && meal.date <= endDate
+      );
+      
+      console.log('필터링된 가족식단:', { filteredCount: filteredMeals.length, filteredMeals });
+      
+      setFamilyMeals(filteredMeals);
+    } catch (error) {
+      console.error('=== 가족식단 로드 실패 ===');
+      console.error('에러 타입:', typeof error);
+      console.error('에러 생성자:', error?.constructor?.name);
+      
+      if (error instanceof Error) {
+        console.error('Error 인스턴스 정보:');
+        console.error('  name:', error.name);
+        console.error('  message:', error.message);
+        console.error('  stack:', error.stack);
+      } else {
+        console.error('Error 인스턴스가 아님');
+      }
+      
+      // 에러 객체의 모든 속성을 순회하며 로깅
+      console.error('에러 객체 속성들:');
+      if (error && typeof error === 'object') {
+        for (const key in error) {
+          try {
+            const value = (error as Record<string, unknown>)[key];
+            console.error(`  ${key}:`, value);
+          } catch {
+            console.error(`  ${key}: [접근 불가]`);
+          }
+        }
+        
+        // Object.getOwnPropertyNames를 사용하여 모든 속성 확인
+        try {
+          const allProps = Object.getOwnPropertyNames(error);
+          console.error('Object.getOwnPropertyNames 결과:', allProps);
+          
+          allProps.forEach(prop => {
+            try {
+              const value = (error as Record<string, unknown>)[prop];
+              console.error(`  ${prop}:`, value);
+            } catch {
+              console.error(`  ${prop}: [접근 불가]`);
+            }
+          });
+        } catch {
+          console.error('Object.getOwnPropertyNames 실패');
+        }
+      } else {
+        console.error('에러가 객체가 아님:', error);
+      }
+      
+      setFamilyMeals([]);
+    }
+  };
+
+  // currentDate 변경 시 가족식단 데이터도 로드
+  useEffect(() => {
+    loadFamilyMeals();
+  }, [currentDate, viewMode]);
+
   const loadAllData = async () => {
     console.log('=== loadAllData 시작 ===');
     try {
@@ -159,12 +301,18 @@ export default function SchedulePage() {
         setCompletions([]);
       }
       
-      console.log('4. loadAllData 완료');
+      // 가족식단 로드
+      console.log('4. 가족식단 로드 시작...');
+      await loadFamilyMeals();
+      console.log('5. 가족식단 로드 완료');
+      
+      console.log('6. loadAllData 완료');
     } catch (error) {
       console.error('loadAllData 오류:', error);
       // 에러 발생 시 기본값 설정
       setSchedules([]);
       setCompletions([]);
+      setFamilyMeals([]);
     }
   };
 
@@ -686,6 +834,85 @@ export default function SchedulePage() {
     }
   };
 
+  // 가족식단 정렬 함수 (날짜 - 아침, 점심, 저녁 순서)
+  const sortFamilyMeals = (mealsToSort: FamilyMeal[]) => {
+    const sortedMeals = [...mealsToSort];
+    
+    return sortedMeals.sort((a, b) => {
+      // 먼저 날짜로 정렬
+      const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      
+      // 같은 날짜인 경우 아침, 점심, 저녁 순서로 정렬
+      const mealOrder = { breakfast: 1, lunch: 2, dinner: 3 };
+      
+      // 아침이 있으면 첫 번째
+      if (a.breakfast && !b.breakfast) return -1;
+      if (!a.breakfast && b.breakfast) return 1;
+      
+      // 점심이 있으면 두 번째
+      if (a.lunch && !b.lunch) return -1;
+      if (!a.lunch && b.lunch) return 1;
+      
+      // 저녁이 있으면 세 번째
+      if (a.dinner && !b.dinner) return -1;
+      if (!a.dinner && b.dinner) return 1;
+      
+      return 0;
+    });
+  };
+
+  // 현재 기간의 일정 가져오기
+  const getCurrentPeriodSchedules = () => {
+    if (!schedules || schedules.length === 0) return [];
+    
+    const currentPeriodSchedules = [];
+    
+    if (viewMode === 'month') {
+      // 이번 달의 모든 날짜에 대해 일정 확인
+      const start = startOfMonth(currentDate);
+      const end = endOfMonth(currentDate);
+      const days = eachDayOfInterval({ start, end });
+      
+      const monthSchedules = new Set<Schedule>();
+      days.forEach(day => {
+        const daySchedules = getSchedulesForDate(day);
+        daySchedules.forEach(schedule => monthSchedules.add(schedule));
+      });
+      
+      currentPeriodSchedules.push(...Array.from(monthSchedules));
+    } else if (viewMode === 'week') {
+      // 이번 주의 모든 날짜에 대해 일정 확인
+      const weekDays = getWeekDays();
+      
+      const weekSchedules = new Set<Schedule>();
+      weekDays.forEach(day => {
+        const daySchedules = getSchedulesForDate(day);
+        daySchedules.forEach(schedule => weekSchedules.add(schedule));
+      });
+      
+      currentPeriodSchedules.push(...Array.from(weekSchedules));
+    } else {
+      // 오늘의 일정
+      currentPeriodSchedules.push(...getSchedulesForDate(currentDate));
+    }
+    
+    return currentPeriodSchedules;
+  };
+
+  // 현재 기간 제목 가져오기
+  const getCurrentPeriodTitle = () => {
+    if (viewMode === 'month') {
+      return `이번달의 일정 (${format(currentDate, 'yyyy년 M월', { locale: ko })})`;
+    } else if (viewMode === 'week') {
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+      return `이번주의 일정 (${format(weekStart, 'M월 d일')} - ${format(weekEnd, 'M월 d일')})`;
+    } else {
+      return `오늘의 일정 (${format(currentDate, 'M월 d일 (EEEE)', { locale: ko })})`;
+    }
+  };
+
   // 가족 구성원 토글 핸들러
   const handleFamilyMemberToggle = (member: FamilyMember) => {
     if (member === 'family') {
@@ -1168,15 +1395,15 @@ export default function SchedulePage() {
           </div>
 
           {/* 뷰 모드 선택 */}
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex justify-center mb-6">
             <div className="flex space-x-2">
               <Button
-                variant={viewMode === 'month' ? 'default' : 'outline'}
+                variant={viewMode === 'day' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setViewMode('month')}
+                onClick={() => setViewMode('day')}
               >
-                <Grid3X3 className="mr-2 h-4 w-4" />
-                월별
+                <List className="mr-2 h-4 w-4" />
+                일별
               </Button>
               <Button
                 variant={viewMode === 'week' ? 'default' : 'outline'}
@@ -1187,114 +1414,128 @@ export default function SchedulePage() {
                 주별
               </Button>
               <Button
-                variant={viewMode === 'day' ? 'default' : 'outline'}
+                variant={viewMode === 'month' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setViewMode('day')}
+                onClick={() => setViewMode('month')}
               >
-                <List className="mr-2 h-4 w-4" />
-                일별
+                <Grid3X3 className="mr-2 h-4 w-4" />
+                월별
               </Button>
             </div>
+          </div>
 
-            {/* 네비게이션 */}
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (viewMode === 'month') {
-                    setCurrentDate(subMonths(currentDate, 1));
-                  } else if (viewMode === 'week') {
-                    handleWeekNavigation('prev');
-                  } else {
-                    handleDayNavigation('prev');
-                  }
-                }}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <div className="flex flex-col items-center">
-                <span className="text-lg font-semibold">
-                  {viewMode === 'month' && format(currentDate, 'yyyy년 M월', { locale: ko })}
-                  {viewMode === 'week' && `${format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'M월 d일')} - ${format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'M월 d일')}`}
-                  {viewMode === 'day' && format(currentDate, 'yyyy년 M월 d일', { locale: ko })}
-                </span>
-                {(() => {
-                  if (viewMode === 'month') {
-                    return !isSameMonth(currentDate, new Date()) ? (
-                      <div className="relative group">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setCurrentDate(new Date())}
-                          className="p-2 h-8 w-8 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 mt-1 transition-colors"
-                        >
-                          <CalendarDays className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
-                          이번달로 돌아가기
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                        </div>
+          {/* 날짜 네비게이션 */}
+          <div className="flex justify-between items-center mb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewMode === 'month') {
+                  setCurrentDate(subMonths(currentDate, 1));
+                } else if (viewMode === 'week') {
+                  handleWeekNavigation('prev');
+                } else {
+                  handleDayNavigation('prev');
+                }
+              }}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+            </Button>
+            
+            <div className="flex flex-col items-center">
+              {viewMode === 'month' && (
+                <h2 className="text-lg font-semibold">
+                  {format(currentDate, 'yyyy년 M월', { locale: ko })}
+                </h2>
+              )}
+              {viewMode === 'week' && (
+                <h2 className="text-lg font-semibold">
+                  {format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'yyyy년 M월 d일', { locale: ko })} ~ {format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'M월 d일', { locale: ko })}
+                </h2>
+              )}
+              {viewMode === 'day' && (
+                <h3 className="text-base font-semibold">
+                  {format(currentDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
+                </h3>
+              )}
+              
+              {/* 오늘/이번주/이번달로 돌아가기 버튼 */}
+              {(() => {
+                if (viewMode === 'month') {
+                  return !isSameMonth(currentDate, new Date()) ? (
+                    <div className="relative group">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setCurrentDate(new Date())}
+                        className="p-2 h-8 w-8 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 mt-1 transition-colors"
+                      >
+                        <CalendarDays className="h-4 w-4" />
+                      </Button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                        이번달로 돌아가기
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                       </div>
-                    ) : null;
-                  } else if (viewMode === 'week') {
-                    const today = new Date();
-                    const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
-                    const currentWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
-                    const isCurrentWeek = currentDate >= currentWeekStart && currentDate <= currentWeekEnd;
-                    return !isCurrentWeek ? (
-                      <div className="relative group">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setCurrentDate(new Date())}
-                          className="p-2 h-8 w-8 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 mt-1 transition-colors"
-                        >
-                          <Clock className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
-                          이번주로 돌아가기
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                        </div>
+                    </div>
+                  ) : null;
+                } else if (viewMode === 'week') {
+                  const today = new Date();
+                  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+                  const currentWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
+                  const isCurrentWeek = currentDate >= currentWeekStart && currentDate <= currentWeekEnd;
+                  return !isCurrentWeek ? (
+                    <div className="relative group">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setCurrentDate(new Date())}
+                        className="p-2 h-8 w-8 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 mt-1 transition-colors"
+                      >
+                        <Clock className="h-4 w-4" />
+                      </Button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                        이번주로 돌아가기
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                       </div>
-                    ) : null;
-                  } else if (viewMode === 'day') {
-                    return !isToday(currentDate) ? (
-                      <div className="relative group">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => setCurrentDate(new Date())}
-                          className="p-2 h-8 w-8 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 mt-1 transition-colors"
-                        >
-                          <List className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
-                          오늘로 돌아가기
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
-                        </div>
+                    </div>
+                  ) : null;
+                } else if (viewMode === 'day') {
+                  return !isToday(currentDate) ? (
+                    <div className="relative group">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setCurrentDate(new Date())}
+                        className="p-2 h-8 w-8 rounded-full bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 mt-1 transition-colors"
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                        오늘로 돌아가기
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800"></div>
                       </div>
-                    ) : null;
-                  }
-                  return null;
-                })()}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  if (viewMode === 'month') {
-                    setCurrentDate(addMonths(currentDate, 1));
-                  } else if (viewMode === 'week') {
-                    handleWeekNavigation('next');
-                  } else {
-                    handleDayNavigation('next');
-                  }
-                }}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                    </div>
+                  ) : null;
+                }
+                return null;
+              })()}
             </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (viewMode === 'month') {
+                  setCurrentDate(addMonths(currentDate, 1));
+                } else if (viewMode === 'week') {
+                  handleWeekNavigation('next');
+                } else {
+                  handleDayNavigation('next');
+                }
+              }}
+            >
+              <ChevronRight className="ml-2 h-4 w-4" />
+            </Button>
           </div>
           
           
@@ -1304,12 +1545,28 @@ export default function SchedulePage() {
             <div className="mb-6" key={refreshKey}>
               {/* 디버깅 정보 */}
               <div className="text-xs text-gray-500 mb-2 p-2 bg-gray-50 rounded border">
-                <div>현재 월: {format(currentDate, 'yyyy-MM')}</div>
-                <div>전체 일정 수: {schedules.length}개</div>
-                <div>완료 상태 수: {completions.length}개</div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div>현재 월: {format(currentDate, 'yyyy-MM')}</div>
+                    <div>전체 일정 수: {schedules.length}개</div>
+                    <div>완료 상태 수: {completions.length}개</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex flex-col space-y-1">
+                      <div className="flex items-center space-x-1">
+                        <div className="w-4 h-4 bg-green-50 text-green-700 rounded-full flex items-center justify-center text-xs font-bold">C</div>
+                        <span>Complete</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <div className="w-4 h-4 bg-orange-50 text-orange-700 rounded-full flex items-center justify-center text-xs font-bold">T</div>
+                        <span>To Do</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               
-                            <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {/* 요일 헤더 */}
                 {['일', '월', '화', '수', '목', '금', '토'].map(day => (
                   <div key={day} className="p-2 text-center font-medium text-gray-500 bg-gray-50">
@@ -1361,7 +1618,7 @@ export default function SchedulePage() {
                     return (
                       <div
                         key={index}
-                        className={`min-h-[100px] p-2 border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        className={`min-h-[80px] sm:min-h-[100px] p-1 sm:p-2 border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
                           isCurrentDate ? 'bg-blue-50' : ''
                         } ${
                           !isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''
@@ -1373,125 +1630,165 @@ export default function SchedulePage() {
                           }
                         }}
                       >
-                        <div className={`text-sm font-medium mb-1 ${
+                        <div className={`text-xs sm:text-sm font-medium mb-1 ${
                           !isCurrentMonth ? 'text-gray-400' : ''
                         }`}>
                           {format(date, 'd')}
                         </div>
-                        <div className="space-y-1 max-h-[80px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                          {daySchedules.map(schedule => {
-                            const isCompleted = isScheduleCompleted(schedule.id, date);
-                            return (
-                              <div
-                                key={schedule.id}
-                                className={`flex items-center justify-between p-1 rounded border text-xs ${
-                                  isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'
-                                }`}
-                                onClick={(e) => e.stopPropagation()} // 이벤트 버블링 방지
-                              >
-                                <div className="flex items-center space-x-1 min-w-0 flex-1">
-                                  <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                                    {getFrequencyShortLabel(schedule.frequency)}
-                                  </Badge>
-                                  <span className={`truncate ${isCompleted ? 'line-through text-gray-500' : ''}`}>
-                                    {schedule.title}
-                                  </span>
+                                                <div className="space-y-1 max-h-[60px] sm:max-h-[80px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                          {daySchedules.length > 0 ? (
+                            <div className="block sm:hidden">
+                              {/* 모바일: 완료/미완료 개수 표시 */}
+                              {(() => {
+                                const completedCount = daySchedules.filter(schedule => isScheduleCompleted(schedule.id, date)).length;
+                                const incompleteCount = daySchedules.length - completedCount;
+                                return (
+                                  <div className="text-xs space-y-1">
+                                    {completedCount > 0 && (
+                                      <div className="text-center py-1 bg-green-50 text-green-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                        C{completedCount}
+                                      </div>
+                                    )}
+                                    {incompleteCount > 0 && (
+                                      <div className="text-center py-1 bg-orange-50 text-orange-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                        T{incompleteCount}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          ) : null}
+                          <div className="hidden sm:block">
+                            {/* 데스크톱: 기존 표시 */}
+                            {daySchedules.map(schedule => {
+                              const isCompleted = isScheduleCompleted(schedule.id, date);
+                              return (
+                                <div
+                                  key={schedule.id}
+                                  className={`flex items-center justify-between p-2 rounded border text-xs ${
+                                    isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+                                  }`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center space-x-1 min-w-0 flex-1">
+                                    <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
+                                      {getFrequencyShortLabel(schedule.frequency)}
+                                    </Badge>
+                                    <span className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                      {schedule.title}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center space-x-1 flex-shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={isCompleted}
+                                      onChange={() => handleToggleComplete(schedule.id, date)}
+                                      className="h-3 w-3 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
+                                    />
+                                  </div>
                                 </div>
-                                <div className="flex space-x-1 flex-shrink-0">
-                                  <input
-                                    type="checkbox"
-                                    checked={isCompleted}
-                                    onChange={() => handleToggleComplete(schedule.id, date)}
-                                    className="h-3 w-3 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
-                                    title={isCompleted ? '완료됨 - 클릭하여 미완료로 변경' : '미완료 - 클릭하여 완료로 변경'}
-                                  />
-                                  {/* 완료 상태 표시 개선 */}
-                                  <span className={`text-xs ${isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
-                                    {isCompleted ? '✓' : '○'}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
                     );
                   });
                 })()}
               </div>
+              
+
             </div>
           )}
 
           {/* 주별 뷰 */}
           {viewMode === 'week' && (
-            <div className="grid grid-cols-7 gap-1 mb-6" key={refreshKey}>
-              {['일', '월', '화', '수', '목', '금', '토'].map(day => (
-                <div key={day} className="p-2 text-center font-medium text-gray-500 bg-gray-50">
-                  {day}
-                </div>
-              ))}
-              {getWeekDays().map((date, index) => {
-                const daySchedules = getSchedulesForDate(date);
-                const isCurrentDate = isToday(date);
-                
-                // 간단한 디버깅: 일정이 있는 날짜만 로그
-                if (daySchedules.length > 0) {
-                  console.log(`주별 ${format(date, 'yyyy-MM-dd')} 일정 수:`, daySchedules.length);
-                }
-                
-                return (
-                  <div
-                    key={index}
-                    className={`min-h-[120px] p-2 border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
-                      isCurrentDate ? 'bg-blue-50' : ''
-                    }`}
-                    onClick={() => {
-                      resetForm(date); // 선택된 날짜로 폼 초기화
-                      setIsDialogOpen(true);
-                    }}
-                  >
-                    <div className="text-sm font-medium mb-1">
-                      {format(date, 'd')}
-                    </div>
-                    <div className="space-y-1 max-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
-                      {daySchedules.map(schedule => {
-                        const isCompleted = isScheduleCompleted(schedule.id, date);
-                        return (
-                          <div
-                            key={schedule.id}
-                            className={`flex items-center justify-between p-1 rounded border text-xs ${
-                              isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'
-                            }`}
-                            onClick={(e) => e.stopPropagation()} // 이벤트 버블링 방지
-                          >
-                            <div className="flex items-center space-x-1 min-w-0 flex-1">
-                              <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                                {getFrequencyShortLabel(schedule.frequency)}
-                              </Badge>
-                              <span className={`truncate ${isCompleted ? 'line-through text-gray-500' : ''}`}>
-                                {schedule.title}
-                              </span>
-                            </div>
-                                                          <div className="flex space-x-1 flex-shrink-0">
-                                <input
-                                  type="checkbox"
-                                  checked={isCompleted}
-                                  onChange={() => handleToggleComplete(schedule.id, date)}
-                                  className="h-3 w-3 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
-                                  title={isCompleted ? '완료됨 - 클릭하여 미완료로 변경' : '미완료 - 클릭하여 완료로 변경'}
-                                />
-                                {/* 완료 상태 표시 개선 */}
-                                <span className={`text-xs ${isCompleted ? 'text-green-600' : 'text-gray-500'}`}>
-                                  {isCompleted ? '✓' : '○'}
-                                </span>
-                              </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+            <div className="mb-6" key={refreshKey}>
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-4">
+                {['일', '월', '화', '수', '목', '금', '토'].map(day => (
+                  <div key={day} className="p-2 text-center font-medium text-gray-500 bg-gray-50">
+                    {day}
                   </div>
-                );
-              })}
+                ))}
+                {getWeekDays().map((date, index) => {
+                  const daySchedules = getSchedulesForDate(date);
+                  const isCurrentDate = isToday(date);
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`min-h-[100px] sm:min-h-[120px] p-1 sm:p-2 border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        isCurrentDate ? 'bg-blue-50' : ''
+                      }`}
+                      onClick={() => {
+                        resetForm(date);
+                        setIsDialogOpen(true);
+                      }}
+                    >
+                      <div className="text-sm font-medium mb-1">
+                        {format(date, 'd')}
+                      </div>
+                      <div className="space-y-1 max-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+                        {daySchedules.length > 0 ? (
+                          <div className="block sm:hidden">
+                            {(() => {
+                              const completedCount = daySchedules.filter(schedule => isScheduleCompleted(schedule.id, date)).length;
+                              const incompleteCount = daySchedules.length - completedCount;
+                              return (
+                                <div className="text-xs space-y-1">
+                                  {completedCount > 0 && (
+                                    <div className="text-center py-1 bg-green-50 text-green-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                      C{completedCount}
+                                    </div>
+                                  )}
+                                  {incompleteCount > 0 && (
+                                    <div className="text-center py-1 bg-orange-50 text-orange-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                      T{incompleteCount}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        ) : null}
+                        <div className="hidden sm:block">
+                          {daySchedules.map(schedule => {
+                            const isCompleted = isScheduleCompleted(schedule.id, date);
+                            return (
+                              <div
+                                key={schedule.id}
+                                className={`flex items-center justify-between p-2 rounded border text-xs ${
+                                  isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+                                }`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center space-x-1 min-w-0 flex-1">
+                                  <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
+                                    {getFrequencyShortLabel(schedule.frequency)}
+                                  </Badge>
+                                  <span className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                    {schedule.title}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-1 flex-shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isCompleted}
+                                    onChange={() => handleToggleComplete(schedule.id, date)}
+                                    className="h-3 w-3 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
             </div>
           )}
 
@@ -1585,10 +1882,80 @@ export default function SchedulePage() {
                   )}
                 </div>
               </div>
+
             </div>
           )}
 
-          {/* 일정 목록 */}
+          {/* 현재 기간 일정 */}
+          {getCurrentPeriodSchedules().length > 0 && (
+            <div className="mb-8">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {getCurrentPeriodTitle()}
+                  {!selectedFamilyMembers.includes('family') && (
+                    <span className="text-sm font-normal text-gray-600 ml-2">
+                      ({selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')})
+                    </span>
+                  )}
+                </h3>
+                <div className="text-sm text-gray-600">
+                  총 {getCurrentPeriodSchedules().length}개 일정
+                </div>
+              </div>
+              <div className="space-y-3">
+                {getCurrentPeriodSchedules().map((schedule) => (
+                  <Card 
+                    key={schedule.id} 
+                    className="hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer border border-blue-200 bg-blue-50"
+                    onClick={() => handleEdit(schedule)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center space-x-3 min-w-0 flex-1">
+                          <CalendarIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <h4 className="font-medium text-gray-900 truncate">{schedule.title}</h4>
+                            <div className="flex items-center space-x-2 mt-1">
+                              <Badge className={`text-xs ${getFrequencyColor(schedule.frequency)}`}>
+                                {getPatternDetail(schedule)}
+                              </Badge>
+                              {/* 가족 구성원 배지들 */}
+                              <div className="flex space-x-1">
+                                {schedule.family_members && Array.isArray(schedule.family_members) ? 
+                                  schedule.family_members.map(member => (
+                                    <Badge key={member} className={`text-xs ${FAMILY_MEMBER_COLORS[member]}`}>
+                                      {FAMILY_MEMBER_LABELS[member]}
+                                    </Badge>
+                                  ))
+                                  : 
+                                  <Badge className="text-xs bg-blue-100 text-blue-800">
+                                    가족
+                                  </Badge>
+                                }
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex space-x-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(schedule)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+
+
+          {/* 등록된 일정 */}
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
-import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, List } from "lucide-react";
+import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, List, ChefHat } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addDays, subDays, isToday, isSameMonth } from "date-fns";
 import { ko } from "date-fns/locale";
 import { familyMealsApi, mealsApi, FamilyMeal, Meal } from "@/lib/supabase-client";
@@ -16,7 +16,7 @@ import { familyMealsApi, mealsApi, FamilyMeal, Meal } from "@/lib/supabase-clien
 export default function FamilyMealsPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string>("");
   const [mealName, setMealName] = useState("");
@@ -158,6 +158,32 @@ export default function FamilyMealsPage() {
     }
   };
 
+  // 가족식단 정렬 함수 (날짜와 아침->점심->저녁 순서)
+  const sortFamilyMeals = (mealsToSort: FamilyMeal[]) => {
+    const sortedMeals = [...mealsToSort];
+    
+    return sortedMeals.sort((a, b) => {
+      // 먼저 날짜로 정렬
+      const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      
+      // 같은 날짜인 경우 아침, 점심, 저녁 순서로 정렬
+      // 아침이 있으면 첫 번째
+      if (a.breakfast && !b.breakfast) return -1;
+      if (!a.breakfast && b.breakfast) return 1;
+      
+      // 점심이 있으면 두 번째
+      if (a.lunch && !b.lunch) return -1;
+      if (!a.lunch && b.lunch) return 1;
+      
+      // 저녁이 있으면 세 번째
+      if (a.dinner && !b.dinner) return -1;
+      if (!a.dinner && b.dinner) return 1;
+      
+      return 0;
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen pb-20 md:pb-0 md:pt-16">
@@ -191,12 +217,12 @@ export default function FamilyMealsPage() {
           {/* 뷰 모드 선택 */}
           <div className="flex space-x-2 mb-6">
             <Button
-              variant={viewMode === 'month' ? 'default' : 'outline'}
+              variant={viewMode === 'day' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setViewMode('month')}
+              onClick={() => setViewMode('day')}
             >
-              <CalendarDays className="mr-2 h-4 w-4" />
-              월별
+              <List className="mr-2 h-4 w-4" />
+              일별
             </Button>
             <Button
               variant={viewMode === 'week' ? 'default' : 'outline'}
@@ -207,12 +233,12 @@ export default function FamilyMealsPage() {
               주별
             </Button>
             <Button
-              variant={viewMode === 'day' ? 'default' : 'outline'}
+              variant={viewMode === 'month' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setViewMode('day')}
+              onClick={() => setViewMode('month')}
             >
-              <List className="mr-2 h-4 w-4" />
-              일별
+              <CalendarDays className="mr-2 h-4 w-4" />
+              월별
             </Button>
           </div>
 
@@ -224,7 +250,7 @@ export default function FamilyMealsPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <div className="flex flex-col items-center">
-                  <h2 className="text-xl font-semibold">
+                  <h2 className="text-lg font-semibold">
                     {format(currentDate, 'yyyy년 M월', { locale: ko })}
                   </h2>
                   {!isSameMonth(currentDate, new Date()) && (
@@ -313,31 +339,43 @@ export default function FamilyMealsPage() {
                         }`}>
                           {format(date, 'd')}
                         </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1">
                           {dayMeals && (
                             <>
                               {dayMeals.breakfast && (
-                                <div className="flex items-center space-x-1 p-1.5 rounded border text-xs bg-white">
-                                  <Badge className={`text-xs ${getMealTypeColor('breakfast')}`}>
-                                    아침
-                                  </Badge>
-                                  <span className="truncate">{dayMeals.breakfast}</span>
+                                <div className="p-1 rounded border text-xs bg-white">
+                                  <div className="flex items-center space-x-1 mb-0.5">
+                                    <Badge className={`text-xs ${getMealTypeColor('breakfast')} flex-shrink-0 px-1 py-0.5`}>
+                                      아침
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-gray-700 break-words leading-tight px-1">
+                                    {dayMeals.breakfast}
+                                  </div>
                                 </div>
                               )}
                               {dayMeals.lunch && (
-                                <div className="flex items-center space-x-1 p-1.5 rounded border text-xs bg-white">
-                                  <Badge className={`text-xs ${getMealTypeColor('lunch')}`}>
-                                    점심
-                                  </Badge>
-                                  <span className="truncate">{dayMeals.lunch}</span>
+                                <div className="p-1 rounded border text-xs bg-white">
+                                  <div className="flex items-center space-x-1 mb-0.5">
+                                    <Badge className={`text-xs ${getMealTypeColor('lunch')} flex-shrink-0 px-1 py-0.5`}>
+                                      점심
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-gray-700 break-words leading-tight px-1">
+                                    {dayMeals.lunch}
+                                  </div>
                                 </div>
                               )}
                               {dayMeals.dinner && (
-                                <div className="flex items-center space-x-1 p-1.5 rounded border text-xs bg-white">
-                                  <Badge className={`text-xs ${getMealTypeColor('dinner')}`}>
-                                    저녁
-                                  </Badge>
-                                  <span className="truncate">{dayMeals.dinner}</span>
+                                <div className="p-1 rounded border text-xs bg-white">
+                                  <div className="flex items-center space-x-1 mb-0.5">
+                                    <Badge className={`text-xs ${getMealTypeColor('dinner')} flex-shrink-0 px-1 py-0.5`}>
+                                      저녁
+                                    </Badge>
+                                  </div>
+                                  <div className="text-xs text-gray-700 break-words leading-tight px-1">
+                                    {dayMeals.dinner}
+                                  </div>
                                 </div>
                               )}
                             </>
@@ -348,6 +386,55 @@ export default function FamilyMealsPage() {
                   });
                 })()}
               </div>
+              
+              {/* 이번달 식단 리스트 */}
+              {familyMeals.length > 0 && (
+                <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
+                    <ChefHat className="h-5 w-5 mr-2" />
+                    이번달 식단 목록
+                  </h4>
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {sortFamilyMeals(familyMeals).map((meal) => {
+                      const isToday = format(new Date(meal.date), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                      return (
+                        <div key={meal.id} className={`p-3 rounded-lg border ${
+                          isToday ? 'bg-blue-50 border-blue-300' : 'bg-white border-green-200'
+                        }`}>
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Badge variant="outline" className={`text-xs font-medium ${
+                              isToday ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-white'
+                            }`}>
+                              {format(new Date(meal.date), 'M월 d일 (E)', { locale: ko })}
+                              {isToday && ' - 오늘'}
+                            </Badge>
+                          </div>
+                        <div className="space-y-2">
+                          {meal.breakfast && (
+                            <div className="flex items-center space-x-2">
+                              <Badge className="text-xs bg-blue-100 text-blue-800 w-12 text-center">아침</Badge>
+                              <span className="text-sm text-gray-700 break-words">{meal.breakfast}</span>
+                            </div>
+                          )}
+                          {meal.lunch && (
+                            <div className="flex items-center space-x-2">
+                              <Badge className="text-xs bg-green-100 text-green-800 w-12 text-center">점심</Badge>
+                              <span className="text-sm text-gray-700 break-words">{meal.lunch}</span>
+                            </div>
+                          )}
+                          {meal.dinner && (
+                            <div className="flex items-center space-x-2">
+                              <Badge className="text-xs bg-purple-100 text-purple-800 w-12 text-center">저녁</Badge>
+                              <span className="text-sm text-gray-700 break-words">{meal.dinner}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -359,7 +446,7 @@ export default function FamilyMealsPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
                 <div className="flex flex-col items-center">
-                  <h2 className="text-xl font-semibold">
+                  <h2 className="text-lg font-semibold">
                     {format(getWeekDays()[0], 'yyyy년 M월 d일', { locale: ko })} ~ {format(getWeekDays()[6], 'M월 d일', { locale: ko })}
                   </h2>
                   {(() => {
@@ -414,31 +501,43 @@ export default function FamilyMealsPage() {
                       <div className="text-sm font-medium mb-1">
                         {format(date, 'd')}
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-1">
                         {dayMeals && (
                           <>
                             {dayMeals.breakfast && (
-                              <div className="flex items-center space-x-1 p-1.5 rounded border text-xs bg-white">
-                                <Badge className={`text-xs ${getMealTypeColor('breakfast')}`}>
-                                  아침
-                                </Badge>
-                                <span className="truncate">{dayMeals.breakfast}</span>
+                              <div className="p-1 rounded border text-xs bg-white">
+                                <div className="flex items-center space-x-1 mb-0.5">
+                                  <Badge className={`text-xs ${getMealTypeColor('breakfast')} flex-shrink-0 px-1 py-0.5`}>
+                                    아침
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-gray-700 break-words leading-tight px-1">
+                                  {dayMeals.breakfast}
+                                </div>
                               </div>
                             )}
                             {dayMeals.lunch && (
-                              <div className="flex items-center space-x-1 p-1.5 rounded border text-xs bg-white">
-                                <Badge className={`text-xs ${getMealTypeColor('lunch')}`}>
-                                  점심
-                                </Badge>
-                                <span className="truncate">{dayMeals.lunch}</span>
+                              <div className="p-1 rounded border text-xs bg-white">
+                                <div className="flex items-center space-x-1 mb-0.5">
+                                  <Badge className={`text-xs ${getMealTypeColor('lunch')} flex-shrink-0 px-1 py-0.5`}>
+                                    점심
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-gray-700 break-words leading-tight px-1">
+                                  {dayMeals.lunch}
+                                </div>
                               </div>
                             )}
                             {dayMeals.dinner && (
-                              <div className="flex items-center space-x-1 p-1.5 rounded border text-xs bg-white">
-                                <Badge className={`text-xs ${getMealTypeColor('dinner')}`}>
-                                  저녁
-                                </Badge>
-                                <span className="truncate">{dayMeals.dinner}</span>
+                              <div className="p-1 rounded border text-xs bg-white">
+                                <div className="flex items-center space-x-1 mb-0.5">
+                                  <Badge className={`text-xs ${getMealTypeColor('dinner')} flex-shrink-0 px-1 py-0.5`}>
+                                    저녁
+                                  </Badge>
+                                </div>
+                                <div className="text-xs text-gray-700 break-words leading-tight px-1">
+                                  {dayMeals.dinner}
+                                </div>
                               </div>
                             )}
                           </>
@@ -448,6 +547,64 @@ export default function FamilyMealsPage() {
                   );
                 })}
               </div>
+              
+              {/* 이번주 식단 리스트 */}
+              {(() => {
+                const weekMeals = familyMeals.filter(meal => {
+                  const mealDate = new Date(meal.date);
+                  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+                  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+                  return mealDate >= weekStart && mealDate <= weekEnd;
+                });
+                
+                return weekMeals.length > 0 ? (
+                  <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <h4 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
+                      <ChefHat className="h-5 w-5 mr-2" />
+                      이번주 식단 목록
+                    </h4>
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                      {sortFamilyMeals(weekMeals).map((meal) => {
+                        const isToday = format(new Date(meal.date), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                        return (
+                          <div key={meal.id} className={`p-3 rounded-lg border ${
+                            isToday ? 'bg-blue-50 border-blue-300' : 'bg-white border-green-200'
+                          }`}>
+                            <div className="flex items-center space-x-2 mb-2">
+                              <Badge variant="outline" className={`text-xs font-medium ${
+                                isToday ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-white'
+                              }`}>
+                                {format(new Date(meal.date), 'M월 d일 (E)', { locale: ko })}
+                                {isToday && ' - 오늘'}
+                              </Badge>
+                            </div>
+                          <div className="space-y-2">
+                            {meal.breakfast && (
+                              <div className="flex items-center space-x-2">
+                                <Badge className="text-xs bg-blue-100 text-blue-800 w-12 text-center">아침</Badge>
+                                <span className="text-sm text-gray-700 break-words">{meal.breakfast}</span>
+                              </div>
+                            )}
+                            {meal.lunch && (
+                              <div className="flex items-center space-x-2">
+                                <Badge className="text-xs bg-green-100 text-green-800 w-12 text-center">점심</Badge>
+                                <span className="text-sm text-gray-700 break-words">{meal.lunch}</span>
+                              </div>
+                            )}
+                            {meal.dinner && (
+                              <div className="flex items-center space-x-2">
+                                <Badge className="text-xs bg-purple-100 text-purple-800 w-12 text-center">저녁</Badge>
+                                <span className="text-sm text-gray-700 break-words">{meal.dinner}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
           )}
 
@@ -460,7 +617,7 @@ export default function FamilyMealsPage() {
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <div className="flex flex-col items-center">
-                    <h3 className="text-lg font-semibold">
+                    <h3 className="text-base font-semibold">
                       {format(currentDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
                     </h3>
                     {!isToday(currentDate) && (
@@ -592,6 +749,48 @@ export default function FamilyMealsPage() {
                   })()}
                 </div>
               </div>
+              
+              {/* 오늘의 식단 상세 */}
+              {(() => {
+                const todayMeal = getMealForDate(currentDate);
+                return todayMeal && (todayMeal.breakfast || todayMeal.lunch || todayMeal.dinner) ? (
+                  <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <h4 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
+                      <ChefHat className="h-5 w-5 mr-2" />
+                      오늘의 식단 상세
+                    </h4>
+                    <div className="space-y-4">
+                      {todayMeal.breakfast && (
+                        <div className="p-4 bg-white rounded-lg border border-blue-200">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <Badge className="text-sm bg-blue-100 text-blue-800 px-3 py-1">🌅 아침</Badge>
+                            <span className="text-xs text-gray-500">오전 식사</span>
+                          </div>
+                          <div className="text-lg font-medium text-gray-800 break-words">{todayMeal.breakfast}</div>
+                        </div>
+                      )}
+                      {todayMeal.lunch && (
+                        <div className="p-4 bg-white rounded-lg border border-green-200">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <Badge className="text-sm bg-green-100 text-green-800 px-3 py-1">☀️ 점심</Badge>
+                            <span className="text-xs text-gray-500">오후 식사</span>
+                          </div>
+                          <div className="text-lg font-medium text-gray-800 break-words">{todayMeal.lunch}</div>
+                        </div>
+                      )}
+                      {todayMeal.dinner && (
+                        <div className="p-4 bg-white rounded-lg border border-purple-200">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <Badge className="text-sm bg-purple-100 text-purple-800 px-3 py-1">🌙 저녁</Badge>
+                            <span className="text-xs text-gray-500">저녁 식사</span>
+                          </div>
+                          <div className="text-lg font-medium text-gray-800 break-words">{todayMeal.dinner}</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null;
+              })()}
             </div>
           )}
         </div>

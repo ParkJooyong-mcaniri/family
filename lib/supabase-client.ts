@@ -3,6 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
+// 환경 변수 확인 로깅 (개발 모드에서만)
+if (process.env.NODE_ENV === 'development') {
+  console.log('Supabase 환경 변수 확인:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    urlLength: supabaseUrl?.length || 0,
+    keyLength: supabaseAnonKey?.length || 0
+  });
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
@@ -23,6 +33,35 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }
   }
 })
+
+// Supabase 연결 테스트 함수
+export const testSupabaseConnection = async () => {
+  try {
+    console.log('Supabase 연결 테스트 시작...');
+    
+    // 간단한 쿼리로 연결 테스트
+    const { data, error } = await supabase
+      .from('family_meals')
+      .select('count')
+      .limit(1);
+    
+    if (error) {
+      console.error('Supabase 연결 테스트 실패:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
+      return false;
+    }
+    
+    console.log('Supabase 연결 테스트 성공:', { data });
+    return true;
+  } catch (error) {
+    console.error('Supabase 연결 테스트 중 예외 발생:', error);
+    return false;
+  }
+};
 
 // Database types
 export interface Meal {
@@ -193,18 +232,108 @@ export const familyMealsApi = {
 
   // Get family meals for a month
   async getByMonth(year: number, month: number) {
-    const startDate = `${year}-${month.toString().padStart(2, '0')}-01`
-    const endDate = `${year}-${month.toString().padStart(2, '0')}-31`
-    
-    const { data, error } = await supabase
-      .from('family_meals')
-      .select('*')
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true })
-    
-    if (error) throw error
-    return data as FamilyMeal[]
+    try {
+      const startDate = `${year}-${month.toString().padStart(2, '0')}-01`
+      // 해당 월의 마지막 날을 정확히 계산
+      const lastDayOfMonth = new Date(year, month, 0).getDate()
+      const endDate = `${year}-${month.toString().padStart(2, '0')}-${lastDayOfMonth.toString().padStart(2, '0')}`
+      
+      console.log('getByMonth 호출:', { year, month, startDate, endDate });
+      
+      console.log('Supabase 쿼리 실행:', {
+        table: 'family_meals',
+        startDate,
+        endDate,
+        query: `SELECT * FROM family_meals WHERE date >= '${startDate}' AND date <= '${endDate}' ORDER BY date ASC`
+      });
+      
+      const { data, error } = await supabase
+        .from('family_meals')
+        .select('*')
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true })
+      
+      if (error) {
+        // 에러 객체를 문자열로 변환하여 로깅
+        console.error('=== Supabase 에러 발생 ===');
+        console.error('에러 타입:', typeof error);
+        console.error('에러 생성자:', error.constructor?.name);
+        
+        // 에러 객체의 기본 정보 로깅
+        console.error('에러 기본 정보:');
+        console.error('  타입:', typeof error);
+        console.error('  생성자:', error?.constructor?.name);
+        
+        // 에러 객체를 문자열로 변환 시도
+        try {
+          const errorString = String(error);
+          console.error('에러 문자열:', errorString);
+        } catch {
+          console.error('문자열 변환 실패');
+        }
+        
+        // 에러 객체를 JSON으로 변환 시도
+        try {
+          const errorJson = JSON.stringify(error);
+          console.error('에러 JSON:', errorJson);
+        } catch {
+          console.error('JSON 변환 실패');
+        }
+        
+        // 에러 객체를 JSON으로 변환 시도
+        try {
+          const errorJson = JSON.stringify(error);
+          console.error('에러 JSON:', errorJson);
+        } catch (e) {
+          console.error('JSON 변환 실패:', e);
+        }
+        
+        // 에러 객체를 문자열로 변환 시도
+        try {
+          const errorString = String(error);
+          console.error('에러 문자열:', errorString);
+        } catch (e) {
+          console.error('문자열 변환 실패:', e);
+        }
+        
+        throw error;
+      }
+      
+      console.log('getByMonth 성공:', { dataCount: data?.length || 0, data });
+      return data as FamilyMeal[]
+    } catch (error) {
+      console.error('=== getByMonth 함수 에러 발생 ===');
+      console.error('에러 타입:', typeof error);
+      console.error('에러 생성자:', error?.constructor?.name);
+      
+      if (error instanceof Error) {
+        console.error('Error 인스턴스 정보:');
+        console.error('  name:', error.name);
+        console.error('  message:', error.message);
+        console.error('  stack:', error.stack);
+      } else {
+        console.error('Error 인스턴스가 아님');
+      }
+      
+              // 에러 객체를 문자열로 변환 시도
+        try {
+          const errorString = String(error);
+          console.error('에러 문자열:', errorString);
+        } catch {
+          console.error('문자열 변환 실패');
+        }
+        
+        // 에러 객체를 JSON으로 변환 시도
+        try {
+          const errorJson = JSON.stringify(error);
+          console.error('에러 JSON:', errorJson);
+        } catch {
+          console.error('JSON 변환 실패');
+        }
+      
+      throw error;
+    }
   }
 }
 

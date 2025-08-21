@@ -326,29 +326,35 @@ export default function Home() {
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Clock className="mr-2 h-5 w-5 text-orange-500" />
-                미완료 일정 현황
+                해야 할 일
               </CardTitle>
               <CardDescription>
-                어제, 오늘, 내일의 미완료 일정을 확인하세요
+                어제, 오늘, 내일의 해야 할 일을 확인하세요
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center p-4 bg-red-50 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600 mb-1">{stats.yesterdayUncompleted}</div>
-                  <div className="text-sm text-red-700">어제</div>
-                  <div className="text-xs text-red-600">미완료 일정</div>
-                </div>
-                <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600 mb-1">{stats.todayUncompleted}</div>
-                  <div className="text-sm text-yellow-700">오늘</div>
-                  <div className="text-xs text-yellow-600">미완료 일정</div>
-                </div>
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600 mb-1">{stats.tomorrowUncompleted}</div>
-                  <div className="text-sm text-blue-700">내일</div>
-                  <div className="text-xs text-blue-600">미완료 일정</div>
-                </div>
+                <Link href="/schedule?date=yesterday&view=day" className="block">
+                  <div className="text-center p-4 bg-red-50 rounded-lg hover:bg-red-100 transition-colors cursor-pointer group">
+                    <div className="text-2xl font-bold text-red-600 mb-1 group-hover:text-red-700">{stats.yesterdayUncompleted}</div>
+                    <div className="text-sm text-red-700 group-hover:text-red-800">어제</div>
+                    <div className="text-xs text-red-600 group-hover:text-red-700">했어야 할 일</div>
+                  </div>
+                </Link>
+                <Link href="/schedule?date=today&view=day" className="block">
+                  <div className="text-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors cursor-pointer group">
+                    <div className="text-2xl font-bold text-yellow-600 mb-1 group-hover:text-yellow-700">{stats.todayUncompleted}</div>
+                    <div className="text-sm text-yellow-700 group-hover:text-yellow-800">오늘</div>
+                    <div className="text-xs text-yellow-600 group-hover:text-yellow-700">아직 못한 일</div>
+                  </div>
+                </Link>
+                <Link href="/schedule?date=tomorrow&view=day" className="block">
+                  <div className="text-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer group">
+                    <div className="text-2xl font-bold text-blue-600 mb-1 group-hover:text-blue-700">{stats.tomorrowUncompleted}</div>
+                    <div className="text-sm text-blue-700 group-hover:text-blue-800">내일</div>
+                    <div className="text-xs text-blue-600 group-hover:text-blue-700">할 일</div>
+                  </div>
+                </Link>
               </div>
             </CardContent>
           </Card>
