@@ -200,102 +200,134 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         const file = files[i];
         console.log(`파일 ${i + 1} 처리 시작:`, file.name, file.type, file.size);
         
-        // 파일 타입 검증
-        if (!isSupportedImageFormat(file)) {
-          console.warn('지원되지 않는 파일 형식:', file.name, file.type);
-          alert(`지원되지 않는 파일 형식입니다: ${file.name}\n\n지원 형식: JPG, PNG, HEIC, WebP`);
-          continue;
-        }
-
         try {
-          console.log('HEIC 변환 시작:', file.name);
-          
-          // HEIC/HEIF 파일을 JPEG로 변환
-          const convertedFile = await convertHeicToJpeg(file);
-          console.log('HEIC 변환 완료:', convertedFile.name, '크기:', convertedFile.size);
-
-          // 파일 크기 검증 (모바일에서는 더 작게)
-          const maxFileSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
-          if (convertedFile.size > maxFileSize) {
-            console.warn('파일 크기 초과:', convertedFile.size, '>', maxFileSize);
-            alert(`파일 크기는 ${isMobile ? '3MB' : '5MB'} 이하여야 합니다.\n\n현재 파일: ${(convertedFile.size / 1024 / 1024).toFixed(2)}MB`);
+          // 1단계: 파일 타입 검증
+          if (!isSupportedImageFormat(file)) {
+            console.warn('지원되지 않는 파일 형식:', file.name, file.type);
+            alert(`지원되지 않는 파일 형식입니다: ${file.name}\n\n지원 형식: JPG, PNG, HEIC, WebP`);
             continue;
           }
 
-          console.log('이미지 리사이징 시작:', convertedFile.name);
+          // 2단계: HEIC 변환 (필요한 경우)
+          let processedFile = file;
+          if (file.type === 'image/heic' || file.type === 'image/heif' || 
+              file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+            console.log('HEIC 변환 시작:', file.name);
+            try {
+              processedFile = await convertHeicToJpeg(file);
+              console.log('HEIC 변환 완료:', processedFile.name, '크기:', processedFile.size);
+            } catch (heicError) {
+              console.warn('HEIC 변환 실패, 원본 파일 사용:', heicError);
+              processedFile = file; // 변환 실패 시 원본 사용
+            }
+          }
+
+          // 3단계: 파일 크기 검증
+          const maxFileSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+          if (processedFile.size > maxFileSize) {
+            console.warn('파일 크기 초과:', processedFile.size, '>', maxFileSize);
+            alert(`파일 크기는 ${isMobile ? '3MB' : '5MB'} 이하여야 합니다.\n\n현재 파일: ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
+            continue;
+          }
+
+          // 4단계: 이미지 리사이징
+          console.log('이미지 리사이징 시작:', processedFile.name);
+          let resizedFile = processedFile;
           
-          // 이미지 리사이징
-          const resizedFile = await resizeImage(convertedFile);
-          console.log('이미지 리사이징 완료:', resizedFile.name, '크기:', resizedFile.size);
-          
-          // Supabase Storage에 업로드
+          try {
+            resizedFile = await resizeImage(processedFile);
+            console.log('이미지 리사이징 완료:', resizedFile.name, '크기:', resizedFile.size);
+          } catch (resizeError) {
+            console.warn('리사이징 실패, 원본 파일 사용:', resizeError);
+            resizedFile = processedFile; // 리사이징 실패 시 원본 사용
+          }
+
+          // 5단계: Supabase Storage 업로드
           const timestamp = Date.now();
           const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
           const filePath = `recipes/${fileName}`;
           
           console.log('Storage 업로드 시작:', filePath);
-          await storageApi.uploadImage(resizedFile, filePath);
-          console.log('Storage 업로드 완료');
+          console.log('업로드할 파일 정보:', {
+            name: resizedFile.name,
+            type: resizedFile.type,
+            size: resizedFile.size,
+            lastModified: resizedFile.lastModified
+          });
           
-          // 공개 URL 가져오기
+          // 업로드 시도
+          try {
+            await storageApi.uploadImage(resizedFile, filePath);
+            console.log('Storage 업로드 완료');
+          } catch (uploadApiError) {
+            console.error('Storage API 업로드 실패:', uploadApiError);
+            throw new Error(`Storage 업로드 실패: ${uploadApiError instanceof Error ? uploadApiError.message : '알 수 없는 오류'}`);
+          }
+          
+          // 6단계: 공개 URL 가져오기
+          console.log('공개 URL 생성 시작');
           const publicUrl = storageApi.getPublicUrl(filePath);
-          console.log('공개 URL:', publicUrl);
-          newImageUrls.push(publicUrl);
+          console.log('생성된 공개 URL:', publicUrl);
           
+          // URL 유효성 검증
+          if (!publicUrl || publicUrl === '') {
+            console.error('공개 URL이 비어있음');
+            throw new Error('공개 URL을 가져올 수 없습니다.');
+          }
+          
+          if (!publicUrl.startsWith('http')) {
+            console.error('잘못된 URL 형식:', publicUrl);
+            throw new Error('잘못된 URL 형식입니다.');
+          }
+          
+          newImageUrls.push(publicUrl);
           console.log(`파일 ${i + 1} 처리 완료:`, file.name);
+          console.log('현재까지 성공한 이미지 수:', newImageUrls.length);
+          
         } catch (uploadError) {
           console.error('개별 파일 업로드 실패:', file.name, uploadError);
           
-          // 아이폰에서 더 자세한 에러 메시지
+          // 구체적인 에러 메시지
           let errorMessage = '알 수 없는 오류';
           if (uploadError instanceof Error) {
-            if (uploadError.message.includes('리사이징')) {
-              errorMessage = '이미지 처리 중 오류가 발생했습니다. 다른 이미지를 시도해보세요.';
-            } else if (uploadError.message.includes('업로드')) {
-              errorMessage = '네트워크 연결을 확인하고 다시 시도해보세요.';
-            } else if (uploadError.message.includes('HEIC')) {
-              errorMessage = 'HEIC 파일 변환에 실패했습니다. JPG나 PNG 파일을 시도해보세요.';
-            } else if (uploadError.message.includes('Canvas')) {
-              errorMessage = '브라우저에서 이미지 처리를 지원하지 않습니다. 다른 브라우저를 시도해보세요.';
+            if (uploadError.message.includes('Storage')) {
+              errorMessage = '이미지 저장소 업로드에 실패했습니다. 네트워크 연결을 확인해주세요.';
+            } else if (uploadError.message.includes('공개 URL')) {
+              errorMessage = '이미지 URL 생성에 실패했습니다.';
+            } else if (uploadError.message.includes('리사이징')) {
+              errorMessage = '이미지 처리 중 오류가 발생했습니다.';
             } else {
               errorMessage = uploadError.message;
             }
           }
           
-          // 아이폰 특화 안내
-          if (isMobile) {
-            errorMessage += '\n\n💡 아이폰 사용자: 카메라 앱에서 "가장 호환되는" 형식으로 설정해보세요.';
-          }
-          
-          alert(`파일 "${file.name}" 업로드에 실패했습니다:\n\n${errorMessage}`);
+          alert(`파일 "${file.name}" 업로드에 실패했습니다:\n\n${errorMessage}\n\n다른 이미지를 시도해보세요.`);
           continue;
         }
       }
 
+      // 7단계: 최종 결과 처리
       if (newImageUrls.length > 0) {
         console.log('새 이미지 URL들:', newImageUrls);
         onImagesChange([...images, ...newImageUrls]);
         console.log('이미지 업로드 완료:', newImageUrls.length, '개');
         
         // 성공 메시지
-        if (isMobile) {
-          alert(`✅ 이미지 업로드 완료!\n\n${newImageUrls.length}개 파일이 성공적으로 업로드되었습니다.`);
-        }
+        alert(`✅ 이미지 업로드 완료!\n\n${newImageUrls.length}개 파일이 성공적으로 업로드되었습니다.`);
       } else {
         console.log('업로드된 이미지가 없음');
-        if (isMobile) {
-          alert('⚠️ 업로드할 수 있는 이미지가 없습니다.\n\n지원 형식: JPG, PNG, HEIC, WebP\n파일 크기: 3MB 이하');
-        }
+        alert('⚠️ 업로드할 수 있는 이미지가 없습니다.\n\n지원 형식: JPG, PNG, HEIC, WebP\n파일 크기: 3MB 이하');
       }
+      
     } catch (error) {
-      console.error('이미지 업로드 중 오류:', error);
-      alert(`이미지 업로드 중 오류가 발생했습니다: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+      console.error('전체 업로드 과정 중 오류:', error);
+      alert(`이미지 업로드 중 오류가 발생했습니다:\n\n${error instanceof Error ? error.message : '알 수 없는 오류'}\n\n페이지를 새로고침하고 다시 시도해보세요.`);
     } finally {
       setIsUploading(false);
+      // 모든 입력 필드 초기화
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-      // 카메라 입력도 초기화
       const cameraInput = document.getElementById('camera-input') as HTMLInputElement;
       if (cameraInput) {
         cameraInput.value = '';
