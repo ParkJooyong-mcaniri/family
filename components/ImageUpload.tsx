@@ -15,7 +15,6 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
   const [isUploading, setIsUploading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
-  const [useOriginalFiles, setUseOriginalFiles] = useState(true);
   const [enableDownsizing, setEnableDownsizing] = useState(false);
   const [downsizeQuality, setDownsizeQuality] = useState(0.8);
   const [maxImageSize, setMaxImageSize] = useState(1200);
@@ -111,7 +110,7 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
       const ctx = canvas.getContext('2d');
       const img = new Image();
       
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve) => {
         img.onload = () => {
           try {
             const { width, height } = img;
@@ -235,7 +234,7 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           }
 
           // 2단계: 원본 파일 사용 (변환 없음)
-          let processedFile = file;
+          const processedFile = file;
           console.log('원본 파일 사용, 변환 건너뛰기:', file.name, '타입:', file.type);
 
           // 3단계: 파일 크기 검증
