@@ -183,6 +183,9 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
+    console.log('파일 선택됨:', files.length, '개');
+    console.log('파일 정보:', Array.from(files).map(f => ({ name: f.name, type: f.type, size: f.size })));
+
     if (images.length + files.length > maxImages) {
       alert(`최대 ${maxImages}개의 이미지만 업로드할 수 있습니다.`);
       return;
@@ -195,25 +198,31 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
       
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        console.log(`파일 ${i + 1} 처리 시작:`, file.name, file.type, file.size);
         
         // 파일 타입 검증
         if (!isSupportedImageFormat(file)) {
-          alert('이미지 파일만 업로드할 수 있습니다.');
-          continue;
-        }
-
-        // HEIC/HEIF 파일을 JPEG로 변환
-        const convertedFile = await convertHeicToJpeg(file);
-
-        // 파일 크기 검증 (모바일에서는 더 작게)
-        const maxFileSize = window.innerWidth < 768 ? 3 * 1024 * 1024 : 5 * 1024 * 1024; // 모바일: 3MB, 데스크톱: 5MB
-        if (convertedFile.size > maxFileSize) {
-          alert(`파일 크기는 ${window.innerWidth < 768 ? '3MB' : '5MB'} 이하여야 합니다.`);
+          console.warn('지원되지 않는 파일 형식:', file.name, file.type);
+          alert(`지원되지 않는 파일 형식입니다: ${file.name}\n\n지원 형식: JPG, PNG, HEIC, WebP`);
           continue;
         }
 
         try {
-          console.log('이미지 리사이징 시작:', file.name);
+          console.log('HEIC 변환 시작:', file.name);
+          
+          // HEIC/HEIF 파일을 JPEG로 변환
+          const convertedFile = await convertHeicToJpeg(file);
+          console.log('HEIC 변환 완료:', convertedFile.name, '크기:', convertedFile.size);
+
+          // 파일 크기 검증 (모바일에서는 더 작게)
+          const maxFileSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+          if (convertedFile.size > maxFileSize) {
+            console.warn('파일 크기 초과:', convertedFile.size, '>', maxFileSize);
+            alert(`파일 크기는 ${isMobile ? '3MB' : '5MB'} 이하여야 합니다.\n\n현재 파일: ${(convertedFile.size / 1024 / 1024).toFixed(2)}MB`);
+            continue;
+          }
+
+          console.log('이미지 리사이징 시작:', convertedFile.name);
           
           // 이미지 리사이징
           const resizedFile = await resizeImage(convertedFile);
@@ -232,6 +241,8 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           const publicUrl = storageApi.getPublicUrl(filePath);
           console.log('공개 URL:', publicUrl);
           newImageUrls.push(publicUrl);
+          
+          console.log(`파일 ${i + 1} 처리 완료:`, file.name);
         } catch (uploadError) {
           console.error('개별 파일 업로드 실패:', file.name, uploadError);
           
@@ -262,8 +273,19 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
       }
 
       if (newImageUrls.length > 0) {
+        console.log('새 이미지 URL들:', newImageUrls);
         onImagesChange([...images, ...newImageUrls]);
         console.log('이미지 업로드 완료:', newImageUrls.length, '개');
+        
+        // 성공 메시지
+        if (isMobile) {
+          alert(`✅ 이미지 업로드 완료!\n\n${newImageUrls.length}개 파일이 성공적으로 업로드되었습니다.`);
+        }
+      } else {
+        console.log('업로드된 이미지가 없음');
+        if (isMobile) {
+          alert('⚠️ 업로드할 수 있는 이미지가 없습니다.\n\n지원 형식: JPG, PNG, HEIC, WebP\n파일 크기: 3MB 이하');
+        }
       }
     } catch (error) {
       console.error('이미지 업로드 중 오류:', error);
@@ -272,6 +294,11 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
       setIsUploading(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      // 카메라 입력도 초기화
+      const cameraInput = document.getElementById('camera-input') as HTMLInputElement;
+      if (cameraInput) {
+        cameraInput.value = '';
       }
     }
   };
@@ -342,34 +369,77 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
               type="file"
               multiple
               accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,image/webp"
-              capture="environment"
               onChange={handleFileSelect}
               className="hidden"
             />
-            <Button
-              variant="outline"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="w-full"
-            >
-              {isUploading ? (
-                <>
-                  <Upload className="mr-2 h-4 w-4 animate-spin" />
-                  업로드 중...
-                </>
-              ) : (
-                <>
-                  <ImageIcon className="mr-2 h-4 w-4" />
-                  이미지 선택 ({images.length}/{maxImages})
-                </>
-              )}
-            </Button>
+            
+            {/* 아이폰에서 사진 선택과 카메라 모두 사용할 수 있도록 버튼 분리 */}
+            {isMobile ? (
+              <div className="space-y-2">
+                <Button
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="w-full"
+                >
+                  {isUploading ? (
+                    <>
+                      <Upload className="mr-2 h-4 w-4 animate-spin" />
+                      업로드 중...
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      사진 선택 ({images.length}/{maxImages})
+                    </>
+                  )}
+                </Button>
+                
+                {/* 카메라 전용 버튼 */}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,image/webp"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="camera-input"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => document.getElementById('camera-input')?.click()}
+                  disabled={isUploading}
+                  className="w-full"
+                >
+                  📷 카메라로 촬영
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="w-full"
+              >
+                {isUploading ? (
+                  <>
+                    <Upload className="mr-2 h-4 w-4 animate-spin" />
+                    업로드 중...
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="mr-2 h-4 w-4" />
+                    이미지 선택 ({images.length}/{maxImages})
+                  </>
+                )}
+              </Button>
+            )}
+            
             <p className="text-xs text-gray-500 mt-2">
               {isMobile ? 'JPG, PNG, HEIC 파일 지원 (최대 3MB, 자동 변환 및 리사이징)' : 'JPG, PNG, HEIC 파일 지원 (최대 5MB, 자동 변환 및 리사이징)'}
             </p>
             {isMobile && (
               <p className="text-xs text-blue-600 mt-1">
-                📱 아이폰: HEIC 파일도 자동으로 JPEG로 변환됩니다
+                📱 아이폰: 사진 선택 또는 카메라로 촬영 가능, HEIC 파일도 자동으로 JPEG로 변환됩니다
               </p>
             )}
             {isUploading && (
