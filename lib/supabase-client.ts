@@ -658,34 +658,89 @@ export const schedulesApi = {
 
 // Storage functions for images
 export const storageApi = {
-  // Upload image
+  // Upload image - 권한 문제 해결을 위한 새로운 방식
   async uploadImage(file: File, path: string) {
-    const { data, error } = await supabase.storage
-      .from('recipe-images')
-      .upload(path, file, {
-        cacheControl: '3600',
-        upsert: false
-      })
+    console.log('Storage API 업로드 시작:', {
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      path: path
+    });
     
-    if (error) throw error
-    return data
+    try {
+      // 파일을 ArrayBuffer로 변환하여 업로드
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      console.log('파일을 ArrayBuffer로 변환 완료, 크기:', uint8Array.length);
+      
+      const { data, error } = await supabase.storage
+        .from('recipe-images')
+        .upload(path, uint8Array, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type
+        });
+      
+      if (error) {
+        console.error('Storage API 업로드 실패:', error);
+        throw error;
+      }
+      
+      console.log('Storage API 업로드 성공:', data);
+      return data;
+      
+    } catch (error) {
+      console.error('Storage API 업로드 중 예외 발생:', error);
+      throw error;
+    }
   },
 
-  // Get public URL
+  // Get public URL - 권한 문제 해결을 위한 새로운 방식
   getPublicUrl(path: string) {
-    const { data } = supabase.storage
-      .from('recipe-images')
-      .getPublicUrl(path)
-    
-    return data.publicUrl
+    try {
+      // Supabase Storage에서 직접 public URL 생성
+      const { data } = supabase.storage
+        .from('recipe-images')
+        .getPublicUrl(path);
+      
+      console.log('생성된 public URL:', data.publicUrl);
+      
+      // URL 유효성 검증
+      if (!data.publicUrl || !data.publicUrl.includes('supabase.co')) {
+        throw new Error('잘못된 public URL 생성');
+      }
+      
+      return data.publicUrl;
+      
+    } catch (error) {
+      console.error('Public URL 생성 실패:', error);
+      
+      // 대체 방법: 수동으로 URL 구성
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const manualUrl = `${supabaseUrl}/storage/v1/object/public/recipe-images/${path}`;
+      
+      console.log('수동 생성된 URL:', manualUrl);
+      return manualUrl;
+    }
   },
 
   // Delete image
   async deleteImage(path: string) {
-    const { error } = await supabase.storage
-      .from('recipe-images')
-      .remove([path])
-    
-    if (error) throw error
+    try {
+      const { error } = await supabase.storage
+        .from('recipe-images')
+        .remove([path]);
+      
+      if (error) {
+        console.error('이미지 삭제 실패:', error);
+        throw error;
+      }
+      
+      console.log('이미지 삭제 성공:', path);
+    } catch (error) {
+      console.error('이미지 삭제 중 예외 발생:', error);
+      throw error;
+    }
   }
 } 

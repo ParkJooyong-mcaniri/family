@@ -15,6 +15,10 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
   const [isUploading, setIsUploading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
+  const [useOriginalFiles, setUseOriginalFiles] = useState(true);
+  const [enableDownsizing, setEnableDownsizing] = useState(false);
+  const [downsizeQuality, setDownsizeQuality] = useState(0.8);
+  const [maxImageSize, setMaxImageSize] = useState(1200);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 모바일 감지 (SSR 안전)
@@ -39,16 +43,29 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
     setImageLoadingStates(prev => ({ ...prev, [imageUrl]: false }));
     console.error('이미지 로드 실패:', imageUrl);
     
-    // 에러 발생 시 이미지 URL을 다시 확인
-    console.log('실패한 이미지 URL 정보:', {
-      url: imageUrl,
-      urlType: typeof imageUrl,
-      urlLength: imageUrl?.length,
-      startsWithHttp: imageUrl?.startsWith('http'),
-      containsSupabase: imageUrl?.includes('supabase')
-    });
+    // URL 문제 해결 시도
+    if (imageUrl.includes('supabase.co')) {
+      // 쿼리 파라미터 제거 시도
+      const cleanUrl = imageUrl.split('?')[0];
+      console.log('쿼리 파라미터 제거된 URL 시도:', cleanUrl);
+      
+      if (cleanUrl !== imageUrl) {
+        event.currentTarget.src = cleanUrl;
+        return;
+      }
+      
+      // 수동 URL 생성 시도
+      const urlParts = imageUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1].split('?')[0];
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const manualUrl = `${supabaseUrl}/storage/v1/object/public/recipe-images/recipes/${fileName}`;
+      
+      console.log('수동 생성된 URL 시도:', manualUrl);
+      event.currentTarget.src = manualUrl;
+      return;
+    }
     
-    // 기본 이미지로 대체
+    // 모든 시도 실패 시 기본 이미지로 대체
     event.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Q0EzQUYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7snbTrr7jsp4DsnYw8L3RleHQ+Cjwvc3ZnPgo=';
   };
 
@@ -80,132 +97,112 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
     return supportedExtensions.some(ext => fileName.endsWith(ext));
   };
 
-  // HEIC/HEIF를 JPEG로 변환 (아이폰 호환성)
-  const convertHeicToJpeg = async (file: File): Promise<File> => {
-    if (file.type === 'image/heic' || file.type === 'image/heif' || 
-        file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
-      
-      try {
-        // Canvas를 사용하여 JPEG로 변환
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-        
-        return new Promise((resolve, reject) => {
-          img.onload = () => {
-            try {
-              canvas.width = img.width;
-              canvas.height = img.height;
-              
-              if (ctx) {
-                ctx.drawImage(img, 0, 0);
-                canvas.toBlob((blob) => {
-                  if (blob) {
-                    const jpegFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
-                      type: 'image/jpeg',
-                      lastModified: Date.now(),
-                    });
-                    resolve(jpegFile);
-                  } else {
-                    reject(new Error('HEIC 변환에 실패했습니다.'));
-                  }
-                }, 'image/jpeg', 0.8);
-              } else {
-                reject(new Error('Canvas 컨텍스트를 가져올 수 없습니다.'));
-              }
-            } catch (error) {
-              reject(error);
-            }
-          };
-          
-          img.onerror = () => reject(new Error('HEIC 이미지 로드에 실패했습니다.'));
-          img.src = URL.createObjectURL(file);
-        });
-      } catch (error) {
-        console.warn('HEIC 변환 실패, 원본 파일 사용:', error);
-        return file; // 변환 실패 시 원본 파일 반환
-      }
+  // 안전한 이미지 다운사이징
+  const safeDownsizeImage = async (file: File): Promise<File> => {
+    if (!enableDownsizing) {
+      return file;
     }
-    
-    return file; // HEIC가 아닌 경우 원본 반환
-  };
 
-  const resizeImage = (file: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
+    try {
+      console.log('다운사이징 시작:', file.name, '크기:', file.size);
+      
+      // Canvas를 사용하여 다운사이징
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       const img = new Image();
-
-      img.onload = () => {
-        try {
-          // 모바일 환경을 고려한 최적화된 크기 설정
-          const maxWidth = window.innerWidth < 768 ? 600 : 800; // 모바일에서는 더 작게
-          const maxHeight = window.innerWidth < 768 ? 450 : 600;
-          
-          let { width, height } = img;
-          
-          // 비율 유지하면서 리사이징
-          if (width > height) {
-            if (width > maxWidth) {
-              height = (height * maxWidth) / width;
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = (width * maxHeight) / height;
-              height = maxHeight;
-            }
-          }
-
-          // 모바일에서는 더 작은 크기로 조정
-          if (window.innerWidth < 768 && (width > 400 || height > 300)) {
+      
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          try {
+            const { width, height } = img;
+            console.log('원본 이미지 크기:', width, 'x', height);
+            
+            // 최대 크기 제한
+            let newWidth = width;
+            let newHeight = height;
+            
             if (width > height) {
-              height = (height * 400) / width;
-              width = 400;
+              if (width > maxImageSize) {
+                newHeight = Math.round((height * maxImageSize) / width);
+                newWidth = maxImageSize;
+              }
             } else {
-              width = (width * 300) / height;
-              height = 300;
+              if (height > maxImageSize) {
+                newWidth = Math.round((width * maxImageSize) / height);
+                newHeight = maxImageSize;
+              }
             }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          if (ctx) {
-            // 이미지 품질 향상을 위한 설정
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, 0, 0, width, height);
-          }
-
-          // 모바일에서는 더 낮은 품질로 압축하여 파일 크기 감소
-          const quality = window.innerWidth < 768 ? 0.7 : 0.8;
-          
-          // Canvas를 Blob으로 변환
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const resizedFile = new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(resizedFile);
+            
+            console.log('다운사이징 후 크기:', newWidth, 'x', newHeight);
+            
+            // 크기가 변경되지 않았다면 원본 반환
+            if (newWidth === width && newHeight === height) {
+              console.log('크기 변경 불필요, 원본 반환');
+              resolve(file);
+              return;
+            }
+            
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+            
+            if (ctx) {
+              // 이미지 품질 향상을 위한 설정
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              
+              // 이미지 그리기
+              ctx.drawImage(img, 0, 0, newWidth, newHeight);
+              
+              // 고품질로 변환
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  console.log('다운사이징 완료, Blob 크기:', blob.size);
+                  
+                  // Blob 크기가 너무 작으면 원본 사용
+                  if (blob.size < 1000) {
+                    console.warn('다운사이징된 Blob이 너무 작음, 원본 사용');
+                    resolve(file);
+                    return;
+                  }
+                  
+                  const downsizeFile = new File([blob], file.name, {
+                    type: file.type || 'image/jpeg',
+                    lastModified: Date.now(),
+                  });
+                  
+                  console.log('다운사이징 성공:', downsizeFile.name, '크기:', downsizeFile.size);
+                  console.log('크기 감소율:', ((1 - downsizeFile.size / file.size) * 100).toFixed(1) + '%');
+                  
+                  resolve(downsizeFile);
+                } else {
+                  console.warn('다운사이징 실패, 원본 사용');
+                  resolve(file);
+                }
+              }, file.type || 'image/jpeg', downsizeQuality);
             } else {
-              reject(new Error('이미지 리사이징에 실패했습니다.'));
+              console.warn('Canvas 컨텍스트 없음, 원본 사용');
+              resolve(file);
             }
-          }, 'image/jpeg', quality);
-        } catch (error) {
-          reject(error);
-        }
-      };
-
-      img.onerror = () => {
-        reject(new Error('이미지 로드에 실패했습니다.'));
-      };
-
-      // 모바일에서 메모리 사용량 최적화
-      img.crossOrigin = 'anonymous';
-      img.src = URL.createObjectURL(file);
-    });
+          } catch (error) {
+            console.warn('다운사이징 중 오류, 원본 사용:', error);
+            resolve(file);
+          }
+        };
+        
+        img.onerror = () => {
+          console.warn('이미지 로드 실패, 원본 사용');
+          resolve(file);
+        };
+        
+        // 메모리 누수 방지
+        img.crossOrigin = 'anonymous';
+        img.src = URL.createObjectURL(file);
+      });
+      
+    } catch (error) {
+      console.warn('다운사이징 실패, 원본 사용:', error);
+      return file;
+    }
   };
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,19 +234,9 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
             continue;
           }
 
-          // 2단계: HEIC 변환 (필요한 경우)
+          // 2단계: 원본 파일 사용 (변환 없음)
           let processedFile = file;
-          if (file.type === 'image/heic' || file.type === 'image/heif' || 
-              file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
-            console.log('HEIC 변환 시작:', file.name);
-            try {
-              processedFile = await convertHeicToJpeg(file);
-              console.log('HEIC 변환 완료:', processedFile.name, '크기:', processedFile.size);
-            } catch (heicError) {
-              console.warn('HEIC 변환 실패, 원본 파일 사용:', heicError);
-              processedFile = file; // 변환 실패 시 원본 사용
-            }
-          }
+          console.log('원본 파일 사용, 변환 건너뛰기:', file.name, '타입:', file.type);
 
           // 3단계: 파일 크기 검증
           const maxFileSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
@@ -259,34 +246,72 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
             continue;
           }
 
-          // 4단계: 이미지 리사이징
-          console.log('이미지 리사이징 시작:', processedFile.name);
-          let resizedFile = processedFile;
+          // 4단계: 다운사이징 (옵션에 따라)
+          let processedFileForUpload = processedFile;
           
-          try {
-            resizedFile = await resizeImage(processedFile);
-            console.log('이미지 리사이징 완료:', resizedFile.name, '크기:', resizedFile.size);
-          } catch (resizeError) {
-            console.warn('리사이징 실패, 원본 파일 사용:', resizeError);
-            resizedFile = processedFile; // 리사이징 실패 시 원본 사용
+          if (enableDownsizing) {
+            console.log('다운사이징 적용:', processedFile.name);
+            try {
+              processedFileForUpload = await safeDownsizeImage(processedFile);
+              console.log('다운사이징 완료:', processedFileForUpload.name, '크기:', processedFileForUpload.size);
+            } catch (downsizeError) {
+              console.warn('다운사이징 실패, 원본 사용:', downsizeError);
+              processedFileForUpload = processedFile;
+            }
+          } else {
+            console.log('다운사이징 비활성화, 원본 파일 사용');
           }
 
           // 5단계: Supabase Storage 업로드
           const timestamp = Date.now();
-          const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
-          const filePath = `recipes/${fileName}`;
+          // 파일명을 더 깔끔하게 생성 (확장자 유지)
+          const fileExtension = file.name.split('.').pop() || 'jpg';
+          const cleanFileName = `${timestamp}_${Math.random().toString(36).substring(2, 8)}.${fileExtension}`;
+          const filePath = `recipes/${cleanFileName}`;
+          
+          // 최종 파일의 MIME 타입 재검증 및 강제 설정
+          if (!processedFileForUpload.type.startsWith('image/')) {
+            console.error('잘못된 MIME 타입:', processedFileForUpload.type);
+            alert(`파일 형식이 잘못되었습니다: ${processedFileForUpload.type}\n\n원본 파일 사용 옵션을 활성화하고 다시 시도해보세요.`);
+            continue;
+          }
+          
+          // MIME 타입을 확장자에 따라 강제 설정
+          let finalFile = processedFileForUpload;
+          if (fileExtension.toLowerCase() === 'jpg' || fileExtension.toLowerCase() === 'jpeg') {
+            finalFile = new File([processedFileForUpload], processedFileForUpload.name, {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            });
+            console.log('MIME 타입을 image/jpeg로 강제 설정');
+          } else if (fileExtension.toLowerCase() === 'png') {
+            finalFile = new File([processedFileForUpload], processedFileForUpload.name, {
+              type: 'image/png',
+              lastModified: Date.now()
+            });
+            console.log('MIME 타입을 image/png로 강제 설정');
+          } else if (fileExtension.toLowerCase() === 'webp') {
+            finalFile = new File([processedFileForUpload], processedFileForUpload.name, {
+              type: 'image/webp',
+              lastModified: Date.now()
+            });
+            console.log('MIME 타입을 image/webp로 강제 설정');
+          }
           
           console.log('Storage 업로드 시작:', filePath);
           console.log('업로드할 파일 정보:', {
-            name: resizedFile.name,
-            type: resizedFile.type,
-            size: resizedFile.size,
-            lastModified: resizedFile.lastModified
+            name: finalFile.name,
+            type: finalFile.type,
+            size: finalFile.size,
+            lastModified: finalFile.lastModified
           });
+          
+          // 6단계: Supabase Storage 업로드
+          console.log('Storage 업로드 시작:', filePath);
           
           // 업로드 시도
           try {
-            await storageApi.uploadImage(resizedFile, filePath);
+            await storageApi.uploadImage(finalFile, filePath);
             console.log('Storage 업로드 완료');
           } catch (uploadApiError) {
             console.error('Storage API 업로드 실패:', uploadApiError);
@@ -387,13 +412,15 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
     
     try {
       // Supabase Storage에서 파일 삭제
-      if (imageUrl.includes('recipe-images')) {
-        const pathMatch = imageUrl.match(/recipe-images\/(.+)$/);
-        if (pathMatch) {
-          console.log('Storage에서 파일 삭제:', pathMatch[1]);
-          await storageApi.deleteImage(pathMatch[1]);
-          console.log('Storage 파일 삭제 완료');
-        }
+      if (imageUrl.includes('supabase.co')) {
+        // URL에서 파일 경로 추출
+        const urlParts = imageUrl.split('/');
+        const fileName = urlParts[urlParts.length - 1].split('?')[0]; // 쿼리 파라미터 제거
+        const filePath = `recipes/${fileName}`;
+        
+        console.log('Storage에서 파일 삭제:', filePath);
+        await storageApi.deleteImage(filePath);
+        console.log('Storage 파일 삭제 완료');
       }
       
       const newImages = images.filter((_, i) => i !== index);
@@ -419,18 +446,6 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
             <div className="text-sm text-gray-600">
               업로드된 이미지: {images.length}개
             </div>
-            
-            {/* 디버깅 정보 (개발 모드에서만 표시) */}
-            {process.env.NODE_ENV === 'development' && (
-              <div className="bg-gray-100 p-3 rounded text-xs text-gray-700 space-y-1">
-                <div>디버깅 정보:</div>
-                {images.map((image, index) => (
-                  <div key={`debug-${index}`} className="text-xs">
-                    이미지 {index + 1}: {image?.substring(0, 100)}...
-                  </div>
-                ))}
-              </div>
-            )}
             
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {images.map((image, index) => (
@@ -475,6 +490,68 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         {/* 업로드 버튼 */}
         {images.length < maxImages && (
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
+            
+            {/* 원본 파일 사용 안내 */}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm text-blue-800 font-medium mb-1">
+                📱 이미지 업로드 최적화
+              </div>
+              <div className="text-xs text-blue-700">
+                이미지 변환이나 리사이징 없이 원본 파일을 그대로 업로드하여 품질을 보장합니다.
+              </div>
+            </div>
+            
+            {/* 다운사이징 옵션 */}
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={enableDownsizing}
+                  onChange={(e) => setEnableDownsizing(e.target.checked)}
+                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
+                />
+                <span className="text-sm text-green-800 font-medium">
+                  🖼️ 이미지 다운사이징 (선택사항)
+                </span>
+              </div>
+              
+              {enableDownsizing && (
+                <div className="space-y-2 ml-6">
+                  <div className="flex items-center space-x-2">
+                    <label className="text-xs text-green-700">최대 크기:</label>
+                    <select
+                      value={maxImageSize}
+                      onChange={(e) => setMaxImageSize(Number(e.target.value))}
+                      className="text-xs border border-green-200 rounded px-2 py-1"
+                    >
+                      <option value={800}>800px</option>
+                      <option value={1200}>1200px</option>
+                      <option value={1600}>1600px</option>
+                      <option value={2000}>2000px</option>
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <label className="text-xs text-green-700">품질:</label>
+                    <select
+                      value={downsizeQuality}
+                      onChange={(e) => setDownsizeQuality(Number(e.target.value))}
+                      className="text-xs border border-green-200 rounded px-2 py-1"
+                    >
+                      <option value={0.6}>낮음 (60%)</option>
+                      <option value={0.8}>보통 (80%)</option>
+                      <option value={0.9}>높음 (90%)</option>
+                      <option value={0.95}>최고 (95%)</option>
+                    </select>
+                  </div>
+                  
+                  <div className="text-xs text-green-600">
+                    💡 다운사이징을 활성화하면 이미지 크기와 품질을 조절하여 파일 크기를 줄일 수 있습니다.
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <input
               ref={fileInputRef}
               type="file"
