@@ -14,6 +14,7 @@ interface ImageUploadProps {
 export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [imageLoadingStates, setImageLoadingStates] = useState<{ [key: string]: boolean }>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 모바일 감지 (SSR 안전)
@@ -27,6 +28,34 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
     
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // 이미지 로딩 상태 관리
+  const handleImageLoad = (imageUrl: string) => {
+    setImageLoadingStates(prev => ({ ...prev, [imageUrl]: false }));
+    console.log('이미지 로드 성공:', imageUrl);
+  };
+
+  const handleImageError = (imageUrl: string, event: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    setImageLoadingStates(prev => ({ ...prev, [imageUrl]: false }));
+    console.error('이미지 로드 실패:', imageUrl);
+    
+    // 에러 발생 시 이미지 URL을 다시 확인
+    console.log('실패한 이미지 URL 정보:', {
+      url: imageUrl,
+      urlType: typeof imageUrl,
+      urlLength: imageUrl?.length,
+      startsWithHttp: imageUrl?.startsWith('http'),
+      containsSupabase: imageUrl?.includes('supabase')
+    });
+    
+    // 기본 이미지로 대체
+    event.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Q0EzQUYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7snbTrr7jsp4DsnYw8L3RleHQ+Cjwvc3ZnPgo=';
+  };
+
+  const handleImageLoadStart = (imageUrl: string) => {
+    setImageLoadingStates(prev => ({ ...prev, [imageUrl]: true }));
+    console.log('이미지 로드 시작:', imageUrl);
+  };
 
   // 아이폰에서 지원하는 이미지 형식 확인
   const isSupportedImageFormat = (file: File): boolean => {
@@ -266,19 +295,37 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           
           // 6단계: 공개 URL 가져오기
           console.log('공개 URL 생성 시작');
-          const publicUrl = storageApi.getPublicUrl(filePath);
+          let publicUrl = storageApi.getPublicUrl(filePath);
           console.log('생성된 공개 URL:', publicUrl);
           
-          // URL 유효성 검증
+          // URL 유효성 검증 및 수정
           if (!publicUrl || publicUrl === '') {
             console.error('공개 URL이 비어있음');
             throw new Error('공개 URL을 가져올 수 없습니다.');
+          }
+          
+          // Supabase URL 형식 검증 및 수정
+          if (publicUrl.includes('supabase.co')) {
+            // Supabase URL이 올바른 형식인지 확인
+            if (!publicUrl.startsWith('https://')) {
+              publicUrl = publicUrl.replace('http://', 'https://');
+              console.log('URL을 HTTPS로 수정:', publicUrl);
+            }
+            
+            // URL 끝에 쿼리 파라미터가 있는지 확인
+            if (!publicUrl.includes('?') && !publicUrl.includes('&')) {
+              // Supabase Storage 공개 URL에 필요한 쿼리 파라미터 추가
+              publicUrl = `${publicUrl}?v=${Date.now()}`;
+              console.log('캐시 방지 파라미터 추가:', publicUrl);
+            }
           }
           
           if (!publicUrl.startsWith('http')) {
             console.error('잘못된 URL 형식:', publicUrl);
             throw new Error('잘못된 URL 형식입니다.');
           }
+          
+          console.log('최종 검증된 URL:', publicUrl);
           
           newImageUrls.push(publicUrl);
           console.log(`파일 ${i + 1} 처리 완료:`, file.name);
@@ -368,28 +415,60 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         
         {/* 이미지 미리보기 */}
         {images.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
-            {images.map((image, index) => (
-              <div key={index} className="relative group">
-                <img
-                  src={image}
-                  alt={`레시피 이미지 ${index + 1}`}
-                  className="w-full h-32 object-cover rounded-lg border"
-                  onError={(e) => {
-                    console.error('이미지 로드 실패:', image);
-                    e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiBmaWxsPSIjRjNGNEY2Ii8+Cjx0ZXh0IHg9IjEwMCIgeT0iMTAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Q0EzQUYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7snbTrr7jsp4DsnYw8L3RleHQ+Cjwvc3ZnPgo=';
-                  }}
-                />
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={() => handleRemoveImage(index)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+          <div className="space-y-4">
+            <div className="text-sm text-gray-600">
+              업로드된 이미지: {images.length}개
+            </div>
+            
+            {/* 디버깅 정보 (개발 모드에서만 표시) */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="bg-gray-100 p-3 rounded text-xs text-gray-700 space-y-1">
+                <div>디버깅 정보:</div>
+                {images.map((image, index) => (
+                  <div key={`debug-${index}`} className="text-xs">
+                    이미지 {index + 1}: {image?.substring(0, 100)}...
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+            
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {images.map((image, index) => (
+                <div key={index} className="relative group">
+                  {/* 로딩 상태 표시 */}
+                  {imageLoadingStates[image] && (
+                    <div className="absolute inset-0 bg-gray-200 rounded-lg flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    </div>
+                  )}
+                  
+                  <img
+                    src={image}
+                    alt={`레시피 이미지 ${index + 1}`}
+                    className={`w-full h-32 object-cover rounded-lg border ${
+                      imageLoadingStates[image] ? 'opacity-0' : 'opacity-100'
+                    } transition-opacity duration-300`}
+                    onLoad={() => handleImageLoad(image)}
+                    onError={(e) => handleImageError(image, e)}
+                    onLoadStart={() => handleImageLoadStart(image)}
+                  />
+                  
+                  {/* 이미지 정보 툴팁 */}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="truncate">{image?.substring(0, 50)}...</div>
+                  </div>
+                  
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handleRemoveImage(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
