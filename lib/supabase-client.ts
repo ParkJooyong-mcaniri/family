@@ -653,6 +653,324 @@ export const schedulesApi = {
       
       throw error;
     }
+  },
+
+  // Get today's schedules for specific family members
+  async getTodaySchedulesByMember(familyMembers: string[]) {
+    try {
+      console.log('가족 구성원별 오늘 일정 조회 시작:', familyMembers);
+      
+      // 한국 시간대 기준으로 오늘 날짜 계산
+      const now = new Date();
+      
+      // 로컬 시간대가 이미 한국 시간인지 확인
+      const localOffset = now.getTimezoneOffset();
+      const koreaOffset = 9 * 60; // 한국은 UTC+9
+      
+      let today: string;
+      let dayOfWeek: number;
+      let dayOfMonth: number;
+      
+      if (Math.abs(localOffset + koreaOffset) < 60) {
+        // 로컬 시간대가 한국 시간과 비슷하면 그대로 사용
+        today = now.toISOString().split('T')[0];
+        dayOfWeek = now.getDay();
+        dayOfMonth = now.getDate();
+        console.log('로컬 시간대 사용 (한국 시간과 유사)');
+      } else {
+        // UTC 기준으로 한국 시간 계산
+        const utcTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000));
+        const koreaTime = new Date(utcTime.getTime() + (koreaOffset * 60 * 1000));
+        today = koreaTime.toISOString().split('T')[0];
+        dayOfWeek = koreaTime.getDay();
+        dayOfMonth = koreaTime.getDate();
+        console.log('UTC 기준 한국 시간 계산');
+      }
+      
+      console.log('한국 시간 기준 오늘 날짜 정보:', { 
+        now: now.toISOString(),
+        localOffset,
+        koreaOffset,
+        today, 
+        dayOfWeek, 
+        dayOfMonth,
+        localDate: now.toLocaleDateString('ko-KR'),
+        localDay: now.getDay()
+      });
+      
+      // 모든 일정을 한 번에 가져와서 JavaScript에서 필터링
+      console.log('전체 일정 조회 시작...');
+      
+      let allSchedules: any[] = [];
+      
+      try {
+        const { data, error: allError } = await supabase
+          .from('schedules')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (allError) {
+          console.error('전체 일정 조회 오류:', {
+            error: allError,
+            errorCode: allError.code,
+            errorMessage: allError.message,
+            errorDetails: allError.details,
+            hint: allError.hint
+          });
+          return {};
+        }
+        
+        if (!data || !Array.isArray(data)) {
+          console.warn('전체 일정 데이터가 배열이 아님:', data);
+          return {};
+        }
+        
+        allSchedules = data;
+        console.log('전체 일정 조회 완료:', allSchedules.length, '개');
+        
+        if (allSchedules.length > 0) {
+          console.log('첫 번째 일정 예시:', allSchedules[0]);
+        }
+      } catch (allError) {
+        console.error('전체 일정 조회 중 예외 발생:', allError);
+        return {};
+      }
+      
+      // 각 가족 구성원별로 일정 필터링
+      const memberSchedules: { [key: string]: any[] } = {};
+      
+      for (const member of familyMembers) {
+        try {
+          console.log(`${member} 일정 필터링 시작`);
+          
+          // 해당 구성원의 일정만 필터링
+          const todaySchedules = allSchedules?.filter(schedule => {
+            try {
+              console.log(`${member} 일정 "${schedule.title}" 필터링 시작:`, {
+                family_members: schedule.family_members,
+                frequency: schedule.frequency,
+                start_date: schedule.start_date,
+                end_date: schedule.end_date
+              });
+              
+              // family_members 배열에 해당 구성원이 포함되어 있는지 확인
+              if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
+                console.log(`${member} 일정 "${schedule.title}" family_members 없음 또는 배열 아님`);
+                return false;
+              }
+              
+              const hasMember = schedule.family_members.includes(member);
+              if (!hasMember) {
+                console.log(`${member} 일정 "${schedule.title}" 해당 구성원 포함 안됨:`, schedule.family_members);
+                return false;
+              }
+              
+              console.log(`${member} 일정 "${schedule.title}" 구성원 포함 확인됨`);
+              
+              // 시작일 체크 - 시작일이 오늘 이전이거나 오늘이어야 함
+              if (schedule.start_date) {
+                // schedule.start_date와 today를 모두 YYYY-MM-DD 형식으로 비교
+                const scheduleStartDate = schedule.start_date;
+                if (scheduleStartDate > today) {
+                  console.log(`${member} 일정 "${schedule.title}" 시작일이 미래:`, scheduleStartDate, 'vs 오늘:', today);
+                  return false; // 시작일이 미래인 일정 제외
+                }
+                console.log(`${member} 일정 "${schedule.title}" 시작일 확인됨:`, scheduleStartDate);
+              }
+              
+              // 종료일 체크 - 종료일이 오늘 이후이거나 없어야 함
+              if (schedule.end_date) {
+                // schedule.end_date와 today를 모두 YYYY-MM-DD 형식으로 비교
+                const scheduleEndDate = schedule.end_date;
+                if (scheduleEndDate < today) {
+                  console.log(`${member} 일정 "${schedule.title}" 종료일이 지남:`, scheduleEndDate, 'vs 오늘:', today);
+                  return false; // 종료일이 지난 일정 제외
+                }
+                console.log(`${member} 일정 "${schedule.title}" 종료일 확인됨:`, scheduleEndDate);
+              }
+              
+              console.log(`${member} 일정 "${schedule.title}" 날짜 범위 확인 완료, 빈도별 필터링 시작`);
+              
+              // 일정관리 페이지와 동일한 로직으로 빈도별 필터링
+              let shouldInclude = false;
+              
+              switch (schedule.frequency) {
+                case 'daily':
+                  shouldInclude = true;
+                  break;
+                case 'weekly':
+                  if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
+                    // weekly_day가 1(월요일)~7(일요일)인 경우와 0(일요일)~6(토요일)인 경우 모두 처리
+                    let scheduleDay = schedule.weekly_day;
+                    
+                    // weekly_day가 1~7 범위인 경우 0~6으로 변환
+                    if (scheduleDay >= 1 && scheduleDay <= 7) {
+                      scheduleDay = scheduleDay === 7 ? 0 : scheduleDay; // 7(일요일)을 0으로 변환
+                    }
+                    
+                    shouldInclude = dayOfWeek === scheduleDay;
+                  } else {
+                    // 주차 기반 - 일요일 기준으로 수정
+                    const startDate = new Date(schedule.start_date);
+                    const todayDate = new Date(today);
+                    const weekStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() - startDate.getDay());
+                    const currentWeekStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() - todayDate.getDay());
+                    const weekDiff = Math.floor((currentWeekStart.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+                    shouldInclude = weekDiff >= 0 && weekDiff % 1 === 0;
+                  }
+                  break;
+                case 'monthly':
+                  if (schedule.monthly_day !== null && schedule.monthly_day !== undefined) {
+                    shouldInclude = dayOfMonth === schedule.monthly_day;
+                  } else {
+                    // 시작일 기준
+                    const startDate = new Date(schedule.start_date);
+                    shouldInclude = dayOfMonth === startDate.getDate();
+                  }
+                  break;
+                case 'custom':
+                  // 패턴 처리 - 일정관리 페이지와 동일한 로직
+                  if (schedule.custom_pattern) {
+                    try {
+                      console.log(`${member} "${schedule.title}" custom_pattern 원본:`, schedule.custom_pattern);
+                      
+                      // custom_pattern이 JSON 문자열인 경우 파싱
+                      let pattern;
+                      if (typeof schedule.custom_pattern === 'string') {
+                        pattern = JSON.parse(schedule.custom_pattern);
+                      } else {
+                        pattern = schedule.custom_pattern;
+                      }
+                      
+                      console.log(`${member} "${schedule.title}" custom_pattern 상세 분석:`, {
+                        raw: schedule.custom_pattern,
+                        parsed: pattern,
+                        type: pattern.type,
+                        today: today,
+                        dayOfWeek: dayOfWeek,
+                        startDate: schedule.start_date
+                      });
+                      
+                      // 패턴에 따른 처리
+                      if (pattern.type === 'interval') {
+                        // 간격 기반 (예: 3일마다)
+                        const startDate = new Date(schedule.start_date);
+                        const todayDate = new Date(today);
+                        const daysDiff = Math.floor((todayDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+                        shouldInclude = daysDiff >= 0 && daysDiff % pattern.interval === 0;
+                        console.log(`${member} "${schedule.title}" interval 패턴 결과:`, { daysDiff, interval: pattern.interval, shouldInclude });
+                      } else if (pattern.type === 'specific_days') {
+                        // 특정 요일들 (예: 월,수,금)
+                        const hasDays = pattern.days && Array.isArray(pattern.days);
+                        const includesToday = hasDays && pattern.days.includes(dayOfWeek);
+                        shouldInclude = includesToday;
+                        
+                        console.log(`${member} "${schedule.title}" specific_days 패턴 상세 분석:`, {
+                          patternDays: pattern.days,
+                          todayDay: dayOfWeek,
+                          hasDays,
+                          includesToday,
+                          shouldInclude,
+                          calculation: `${dayOfWeek} ∉ [${pattern.days?.join(', ')}] = ${!includesToday}`
+                        });
+                      } else if (pattern.type === 'weekday') {
+                        // 평일만 (월~금)
+                        shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5;
+                        console.log(`${member} "${schedule.title}" weekday 패턴 결과:`, { todayDay: dayOfWeek, shouldInclude });
+                      } else if (pattern.type === 'weekend') {
+                        // 주말만 (토,일)
+                        shouldInclude = dayOfWeek === 0 || dayOfWeek === 6;
+                        console.log(`${member} "${schedule.title}" weekend 패턴 결과:`, { todayDay: dayOfWeek, shouldInclude });
+                      } else {
+                        // 기본값: 시작일부터 매일
+                        shouldInclude = true;
+                        console.log(`${member} "${schedule.title}" 기본 패턴: 시작일부터 매일 실행`);
+                      }
+                    } catch (error) {
+                      console.error(`${member} 패턴 파싱 오류:`, error);
+                      // 파싱 실패 시 기본값으로 처리
+                      shouldInclude = true;
+                    }
+                  } else {
+                    // custom_pattern이 없으면 시작일부터 매일
+                    shouldInclude = true;
+                    console.log(`${member} "${schedule.title}" custom_pattern 없음: 시작일부터 매일 실행`);
+                  }
+                  break;
+                default:
+                  shouldInclude = false;
+              }
+              
+              if (!shouldInclude) {
+                console.log(`${member} 일정 "${schedule.title}" 오늘 실행 안됨:`, {
+                  frequency: schedule.frequency,
+                  weekly_day: schedule.weekly_day,
+                  monthly_day: schedule.monthly_day,
+                  start_date: schedule.start_date,
+                  today: today,
+                  dayOfWeek,
+                  dayOfMonth
+                });
+              }
+              
+              return shouldInclude;
+            } catch (filterError) {
+              console.warn(`${member} 일정 필터링 중 오류:`, filterError, schedule);
+              return false;
+            }
+          }) || [];
+          
+          console.log(`${member} 필터링 결과:`, todaySchedules.length, '개');
+          
+          // 완료 상태 확인
+          if (todaySchedules.length > 0) {
+            try {
+              const scheduleIds = todaySchedules.map(s => s.id).filter(id => id);
+              if (scheduleIds.length === 0) {
+                console.warn(`${member}: 유효한 일정 ID가 없음`);
+                memberSchedules[member] = [];
+                continue;
+              }
+              
+              const completions = await this.getCompletionStatuses(scheduleIds, today, today);
+              
+              // 완료되지 않은 일정만 필터링하고, 완료 상태 정보 추가
+              const completedIds = new Set(
+                completions.filter(c => c.completed).map(c => c.schedule_id)
+              );
+              
+              const schedulesWithCompletion = todaySchedules.map(schedule => ({
+                ...schedule,
+                completed: completedIds.has(schedule.id)
+              }));
+              
+              memberSchedules[member] = schedulesWithCompletion;
+              
+              console.log(`${member} 최종 오늘 일정:`, schedulesWithCompletion.length, '개');
+              console.log(`${member} 완료된 일정:`, schedulesWithCompletion.filter(s => s.completed).length, '개');
+            } catch (completionError) {
+              console.warn(`${member} 완료 상태 조회 중 오류:`, completionError);
+              // 에러 시 완료 상태 없이 전체 일정 포함
+              memberSchedules[member] = todaySchedules.map(schedule => ({
+                ...schedule,
+                completed: false
+              }));
+            }
+          } else {
+            memberSchedules[member] = [];
+          }
+        } catch (memberError) {
+          console.error(`${member} 일정 처리 중 예외 발생:`, memberError);
+          memberSchedules[member] = [];
+        }
+      }
+      
+      console.log('가족 구성원별 일정 조회 완료:', memberSchedules);
+      return memberSchedules;
+    } catch (error) {
+      console.error('가족 구성원별 일정 조회 전체 오류:', error);
+      return {};
+    }
   }
 }
 
