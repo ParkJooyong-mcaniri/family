@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Upload, X, Image as ImageIcon } from "lucide-react";
 import { storageApi } from "@/lib/supabase-client";
@@ -13,7 +13,93 @@ interface ImageUploadProps {
 
 export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUploadProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 모바일 감지 (SSR 안전)
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // 아이폰에서 지원하는 이미지 형식 확인
+  const isSupportedImageFormat = (file: File): boolean => {
+    const supportedTypes = [
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/heic',
+      'image/heif',
+      'image/webp'
+    ];
+    
+    // MIME 타입 체크
+    if (supportedTypes.includes(file.type)) {
+      return true;
+    }
+    
+    // 파일 확장자 체크 (아이폰에서 MIME 타입이 제대로 감지되지 않는 경우)
+    const fileName = file.name.toLowerCase();
+    const supportedExtensions = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.webp'];
+    
+    return supportedExtensions.some(ext => fileName.endsWith(ext));
+  };
+
+  // HEIC/HEIF를 JPEG로 변환 (아이폰 호환성)
+  const convertHeicToJpeg = async (file: File): Promise<File> => {
+    if (file.type === 'image/heic' || file.type === 'image/heif' || 
+        file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+      
+      try {
+        // Canvas를 사용하여 JPEG로 변환
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        return new Promise((resolve, reject) => {
+          img.onload = () => {
+            try {
+              canvas.width = img.width;
+              canvas.height = img.height;
+              
+              if (ctx) {
+                ctx.drawImage(img, 0, 0);
+                canvas.toBlob((blob) => {
+                  if (blob) {
+                    const jpegFile = new File([blob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), {
+                      type: 'image/jpeg',
+                      lastModified: Date.now(),
+                    });
+                    resolve(jpegFile);
+                  } else {
+                    reject(new Error('HEIC 변환에 실패했습니다.'));
+                  }
+                }, 'image/jpeg', 0.8);
+              } else {
+                reject(new Error('Canvas 컨텍스트를 가져올 수 없습니다.'));
+              }
+            } catch (error) {
+              reject(error);
+            }
+          };
+          
+          img.onerror = () => reject(new Error('HEIC 이미지 로드에 실패했습니다.'));
+          img.src = URL.createObjectURL(file);
+        });
+      } catch (error) {
+        console.warn('HEIC 변환 실패, 원본 파일 사용:', error);
+        return file; // 변환 실패 시 원본 파일 반환
+      }
+    }
+    
+    return file; // HEIC가 아닌 경우 원본 반환
+  };
 
   const resizeImage = (file: File): Promise<File> => {
     return new Promise((resolve, reject) => {
@@ -111,14 +197,17 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         const file = files[i];
         
         // 파일 타입 검증
-        if (!file.type.startsWith('image/')) {
+        if (!isSupportedImageFormat(file)) {
           alert('이미지 파일만 업로드할 수 있습니다.');
           continue;
         }
 
+        // HEIC/HEIF 파일을 JPEG로 변환
+        const convertedFile = await convertHeicToJpeg(file);
+
         // 파일 크기 검증 (모바일에서는 더 작게)
         const maxFileSize = window.innerWidth < 768 ? 3 * 1024 * 1024 : 5 * 1024 * 1024; // 모바일: 3MB, 데스크톱: 5MB
-        if (file.size > maxFileSize) {
+        if (convertedFile.size > maxFileSize) {
           alert(`파일 크기는 ${window.innerWidth < 768 ? '3MB' : '5MB'} 이하여야 합니다.`);
           continue;
         }
@@ -127,7 +216,7 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           console.log('이미지 리사이징 시작:', file.name);
           
           // 이미지 리사이징
-          const resizedFile = await resizeImage(file);
+          const resizedFile = await resizeImage(convertedFile);
           console.log('이미지 리사이징 완료:', resizedFile.name, '크기:', resizedFile.size);
           
           // Supabase Storage에 업로드
@@ -146,19 +235,28 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         } catch (uploadError) {
           console.error('개별 파일 업로드 실패:', file.name, uploadError);
           
-          // 모바일에서 더 자세한 에러 메시지
+          // 아이폰에서 더 자세한 에러 메시지
           let errorMessage = '알 수 없는 오류';
           if (uploadError instanceof Error) {
             if (uploadError.message.includes('리사이징')) {
               errorMessage = '이미지 처리 중 오류가 발생했습니다. 다른 이미지를 시도해보세요.';
             } else if (uploadError.message.includes('업로드')) {
               errorMessage = '네트워크 연결을 확인하고 다시 시도해보세요.';
+            } else if (uploadError.message.includes('HEIC')) {
+              errorMessage = 'HEIC 파일 변환에 실패했습니다. JPG나 PNG 파일을 시도해보세요.';
+            } else if (uploadError.message.includes('Canvas')) {
+              errorMessage = '브라우저에서 이미지 처리를 지원하지 않습니다. 다른 브라우저를 시도해보세요.';
             } else {
               errorMessage = uploadError.message;
             }
           }
           
-          alert(`파일 "${file.name}" 업로드에 실패했습니다: ${errorMessage}`);
+          // 아이폰 특화 안내
+          if (isMobile) {
+            errorMessage += '\n\n💡 아이폰 사용자: 카메라 앱에서 "가장 호환되는" 형식으로 설정해보세요.';
+          }
+          
+          alert(`파일 "${file.name}" 업로드에 실패했습니다:\n\n${errorMessage}`);
           continue;
         }
       }
@@ -243,7 +341,8 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
               ref={fileInputRef}
               type="file"
               multiple
-              accept="image/*"
+              accept="image/jpeg,image/jpg,image/png,image/heic,image/heif,image/webp"
+              capture="environment"
               onChange={handleFileSelect}
               className="hidden"
             />
@@ -266,11 +365,16 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
               )}
             </Button>
             <p className="text-xs text-gray-500 mt-2">
-              {window.innerWidth < 768 ? 'JPG, PNG 파일만 가능 (최대 3MB, 자동 리사이징)' : 'JPG, PNG 파일만 가능 (최대 5MB, 자동 리사이징)'}
+              {isMobile ? 'JPG, PNG, HEIC 파일 지원 (최대 3MB, 자동 변환 및 리사이징)' : 'JPG, PNG, HEIC 파일 지원 (최대 5MB, 자동 변환 및 리사이징)'}
             </p>
+            {isMobile && (
+              <p className="text-xs text-blue-600 mt-1">
+                📱 아이폰: HEIC 파일도 자동으로 JPEG로 변환됩니다
+              </p>
+            )}
             {isUploading && (
               <div className="mt-2 text-xs text-blue-600">
-                모바일에서 이미지 처리 중... 잠시만 기다려주세요.
+                {isMobile ? '모바일에서 이미지 처리 중... 잠시만 기다려주세요.' : '이미지 처리 중... 잠시만 기다려주세요.'}
               </div>
             )}
           </div>
