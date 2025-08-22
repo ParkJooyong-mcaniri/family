@@ -701,7 +701,20 @@ export const schedulesApi = {
       // 모든 일정을 한 번에 가져와서 JavaScript에서 필터링
       console.log('전체 일정 조회 시작...');
       
-      let allSchedules: any[] = [];
+      let allSchedules: Array<{
+        id: string;
+        title: string;
+        description?: string;
+        frequency: string;
+        start_date: string;
+        end_date?: string;
+        family_members: string[];
+        custom_pattern?: string;
+        weekly_day?: number;
+        monthly_day?: number;
+        created_at: string;
+        updated_at: string;
+      }> = [];
       
       try {
         const { data, error: allError } = await supabase
@@ -737,7 +750,21 @@ export const schedulesApi = {
       }
       
       // 각 가족 구성원별로 일정 필터링
-      const memberSchedules: { [key: string]: any[] } = {};
+      const memberSchedules: { [key: string]: Array<{
+        id: string;
+        title: string;
+        description?: string;
+        frequency: string;
+        start_date: string;
+        end_date?: string;
+        family_members: string[];
+        custom_pattern?: string;
+        weekly_day?: number;
+        monthly_day?: number;
+        created_at: string;
+        updated_at: string;
+        completed: boolean;
+      }> } = {};
       
       for (const member of familyMembers) {
         try {
