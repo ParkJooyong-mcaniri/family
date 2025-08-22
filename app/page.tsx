@@ -32,14 +32,9 @@ export default function Home() {
     tomorrowUncompleted: 0,
   });
 
-  // 실제 데이터 로드
+  // 데이터 로드
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
+    const loadData = async () => {
       console.log('데이터 로드 시작...');
       
       try {
@@ -87,23 +82,26 @@ export default function Home() {
           todayUncompleted: 0,
           tomorrowUncompleted: 0,
         });
+        
+      } catch (error) {
+        console.error('데이터 로드 실패:', error);
+        // 에러 시에도 기본 통계는 0으로 설정
+        setStats({
+          totalSchedules: 0,
+          totalFamilyMeals: 0,
+          totalMeals: 0,
+          totalRecipes: 0,
+          yesterdayUncompleted: 0,
+          todayUncompleted: 0,
+          tomorrowUncompleted: 0,
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    } catch (error) {
-      console.error('데이터 로드 실패:', error);
-      // 에러 시에도 기본 통계는 0으로 설정
-      setStats({
-        totalSchedules: 0,
-        totalFamilyMeals: 0,
-        totalMeals: 0,
-        totalRecipes: 0,
-        yesterdayUncompleted: 0,
-        todayUncompleted: 0,
-        tomorrowUncompleted: 0,
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    loadData();
+  }, []);
 
   // 일정 통계 계산 (완료 상태 고려)
   useEffect(() => {
@@ -361,8 +359,8 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="text-green-600 font-semibold mb-2 text-center">👦 세인</div>
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                  <div className="text-blue-600 font-semibold mb-2 text-center">👨 세인</div>
                   <div className="mt-2 text-xs text-gray-500">
                     {isLoading ? (
                       <div className="text-gray-400">로딩 중...</div>
@@ -395,8 +393,8 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                  <div className="text-purple-600 font-semibold mb-2 text-center">👧 세하</div>
+                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <div className="text-green-600 font-semibold mb-2 text-center">👧 세하</div>
                   <div className="mt-2 text-xs text-gray-500">
                     {isLoading ? (
                       <div className="text-gray-400">로딩 중...</div>
@@ -429,8 +427,8 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <div className="text-blue-600 font-semibold mb-2 text-center">👨 아빠</div>
+                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                  <div className="text-red-600 font-semibold mb-2 text-center">👨 아빠</div>
                   <div className="mt-2 text-xs text-gray-500">
                     {isLoading ? (
                       <div className="text-gray-400">로딩 중...</div>
@@ -469,25 +467,26 @@ export default function Home() {
         </div>
 
         {/* Features Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-          {features.map((feature) => {
-            const Icon = feature.icon;
-            return (
-              <Link key={feature.href} href={feature.href}>
+        <div className="mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {features.map((feature, index) => (
+              <Link key={index} href={feature.href}>
                 <Card className="hover:shadow-lg transition-all duration-300 cursor-pointer group">
-                  <CardHeader className="text-center">
-                    <div className={`w-16 h-16 mx-auto mb-4 rounded-full ${feature.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                      <Icon className="h-8 w-8 text-white" />
+                  <CardContent className="p-6 text-center">
+                    <div className={`w-16 h-16 mx-auto mb-4 rounded-full ${feature.color} flex items-center justify-center text-white text-2xl group-hover:scale-110 transition-transform`}>
+                      <feature.icon className="w-8 h-8" />
                     </div>
-                    <CardTitle className="text-xl">{feature.title}</CardTitle>
-                    <CardDescription className="text-gray-600">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2 group-hover:text-gray-700">
+                      {feature.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm group-hover:text-gray-500">
                       {feature.description}
-                    </CardDescription>
-                  </CardHeader>
+                    </p>
+                  </CardContent>
                 </Card>
               </Link>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
         {/* 일정 통계 - 빠른 시작 위로 이동 */}
