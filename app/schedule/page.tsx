@@ -563,7 +563,7 @@ export default function SchedulePage() {
     
     if (selectedFamilyMembers.includes('family')) {
       // 가족이 선택된 경우: family로 등록된 일정 + 선택된 개별 구성원의 일정 모두 병합해서 표시
-      const otherMembers = selectedFamilyMembers.filter(m => m !== 'family');
+      const otherMembers: FamilyMember[] = selectedFamilyMembers.filter(m => m !== 'family');
       
       availableSchedules = schedules.filter(schedule => {
         if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
@@ -571,9 +571,9 @@ export default function SchedulePage() {
         }
         
         // family로 등록된 일정이거나 선택된 개별 구성원의 일정인 경우 모두 포함
-        const isFamilyMatch = schedule.family_members.includes('family');
+        const isFamilyMatch = schedule.family_members.includes('family' as FamilyMember);
         const isOtherMemberMatch = otherMembers.length > 0 ? 
-          schedule.family_members.some(member => otherMembers.includes(member)) : false;
+          schedule.family_members.some((member: FamilyMember) => otherMembers.includes(member)) : false;
         
         return isFamilyMatch || isOtherMemberMatch;
       });
@@ -834,11 +834,11 @@ export default function SchedulePage() {
     
     if (selectedFamilyMembers.includes('family')) {
       // 가족이 선택된 경우: family로 등록된 일정 + 선택된 개별 구성원의 일정 모두 병합해서 표시
-      const otherMembers = selectedFamilyMembers.filter(m => m !== 'family');
+      const otherMembers: FamilyMember[] = selectedFamilyMembers.filter(m => m !== 'family');
       console.log('가족 선택 (개별 구성원과 함께):', otherMembers);
       
       // 모든 조건에 맞는 일정을 수집
-      const allMatchingSchedules = [];
+      const allMatchingSchedules: Schedule[] = [];
       
       schedules.forEach(schedule => {
         if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
@@ -846,9 +846,9 @@ export default function SchedulePage() {
         }
         
         // family로 등록된 일정이거나 선택된 개별 구성원의 일정인 경우 모두 포함
-        const isFamilyMatch = schedule.family_members.includes('family');
+        const isFamilyMatch = schedule.family_members.includes('family' as FamilyMember);
         const isOtherMemberMatch = otherMembers.length > 0 ? 
-          schedule.family_members.some(member => otherMembers.includes(member)) : false;
+          schedule.family_members.some((member: FamilyMember) => otherMembers.includes(member)) : false;
         
         // 가족이 선택되었으면 family로 등록된 일정은 항상 포함
         // 추가로 개별 구성원이 선택되었다면 해당 구성원의 일정도 포함
@@ -1013,7 +1013,7 @@ export default function SchedulePage() {
         setFormData(prev => ({ ...prev, family_members: newMembers }));
       } else {
         // 가족 선택 추가
-        const newSelectedMembers = [...selectedFamilyMembers, 'family'];
+        const newSelectedMembers: FamilyMember[] = [...selectedFamilyMembers, 'family' as FamilyMember];
         setSelectedFamilyMembers(newSelectedMembers);
         setFormData(prev => ({ ...prev, family_members: newSelectedMembers }));
       }

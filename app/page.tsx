@@ -1,12 +1,11 @@
 "use client";
 
 import { Navigation } from "@/components/Navigation";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, List, Clock, ChefHat } from "lucide-react";
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
-import { schedulesApi, familyMealsApi, mealsApi, recipesApi, Schedule, ScheduleCompletion } from "@/lib/supabase-client";
+import { schedulesApi, familyMealsApi, mealsApi, recipesApi, Schedule } from "@/lib/supabase-client";
 import Link from "next/link";
 
 // 시간을 HH:MM 형식으로 포맷팅하는 함수
@@ -17,7 +16,6 @@ const formatTime = (timeString: string) => {
 };
 
 export default function Home() {
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [memberSchedules, setMemberSchedules] = useState<{ [key: string]: Array<{
     id: string;
     title: string;
@@ -27,6 +25,8 @@ export default function Home() {
     end_date?: string;
     family_members: string[];
     completed: boolean;
+    start_time?: string;
+    end_time?: string;
   }> }>({});
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -48,9 +48,7 @@ export default function Home() {
         // 기본 통계 데이터만 로드 (일정 관련)
         const schedulesData = await schedulesApi.getAll();
         
-        if (schedulesData) {
-          setSchedules(schedulesData);
-        }
+        // schedules 데이터는 사용하지 않으므로 주석 처리
         
         // 가족 구성원별 오늘 일정 조회
         const familyMembers = ['family', 'mom', 'sein', 'seha', 'dad'];
@@ -323,10 +321,10 @@ export default function Home() {
                                   </>
                                 )}
                               </div>
-                              {(schedule as any).start_time && (
+                              {schedule.start_time && (
                                 <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime((schedule as any).start_time)}
-                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                  🕐 {formatTime(schedule.start_time)}
+                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
                                 </div>
                               )}
                             </div>
@@ -367,10 +365,10 @@ export default function Home() {
                                   </>
                                 )}
                               </div>
-                              {(schedule as any).start_time && (
+                              {schedule.start_time && (
                                 <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime((schedule as any).start_time)}
-                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                  🕐 {formatTime(schedule.start_time)}
+                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
                                 </div>
                               )}
                             </div>
@@ -411,10 +409,10 @@ export default function Home() {
                                   </>
                                 )}
                               </div>
-                              {(schedule as any).start_time && (
+                              {schedule.start_time && (
                                 <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime((schedule as any).start_time)}
-                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                  🕐 {formatTime(schedule.start_time)}
+                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
                                 </div>
                               )}
                             </div>
@@ -455,10 +453,10 @@ export default function Home() {
                                   </>
                                 )}
                               </div>
-                              {(schedule as any).start_time && (
+                              {schedule.start_time && (
                                 <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime((schedule as any).start_time)}
-                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                  🕐 {formatTime(schedule.start_time)}
+                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
                                 </div>
                               )}
                             </div>
@@ -499,10 +497,10 @@ export default function Home() {
                                   </>
                                 )}
                               </div>
-                              {(schedule as any).start_time && (
+                              {schedule.start_time && (
                                 <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime((schedule as any).start_time)}
-                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                  🕐 {formatTime(schedule.start_time)}
+                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
                                 </div>
                               )}
                             </div>
