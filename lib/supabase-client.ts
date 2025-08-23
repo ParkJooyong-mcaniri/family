@@ -832,7 +832,7 @@ export const schedulesApi = {
                 case 'weekly':
                   if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
                     // weekly_day가 1(월요일)~7(일요일)인 경우와 0(일요일)~6(토요일)인 경우 모두 처리
-                    let scheduleDay = schedule.weekly_day;
+                    const scheduleDay = schedule.weekly_day;
                     
                     // weekly_day는 이미 0~6 형식으로 저장되므로 변환 불필요
                     

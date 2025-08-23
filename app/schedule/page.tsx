@@ -625,7 +625,7 @@ export default function SchedulePage() {
           if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
             // weekly_day는 0(일요일)~6(토요일) 형식으로 저장됨
             const currentDay = date.getDay(); // 0(일요일) ~ 6(토요일)
-            let scheduleDay = schedule.weekly_day;
+            const scheduleDay = schedule.weekly_day;
             
             console.log('주간 패턴 계산:', {
               scheduleTitle: schedule.title,
