@@ -28,18 +28,20 @@ export default function SchedulePage() {
 
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // 강제 리렌더링을 위한 키
-  const [selectedFamilyMembers, setSelectedFamilyMembers] = useState<FamilyMember[]>(['family']); // 기본값은 가족
+  const [selectedFamilyMembers, setSelectedFamilyMembers] = useState<FamilyMember[]>([]); // 기본값은 아무것도 선택하지 않음 (전체 표시)
   const [sortBy, setSortBy] = useState<'created_desc' | 'created_asc' | 'start_date_asc' | 'start_date_desc' | 'title_asc' | 'frequency_asc'>('created_desc');
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     frequency: "daily" as Schedule['frequency'],
+    start_time: format(new Date(), 'HH:mm'),
+    end_time: format(new Date(new Date().getTime() + 60 * 60 * 1000), 'HH:mm'), // 현재 시간 + 1시간
     start_date: format(new Date(), 'yyyy-MM-dd'),
     end_date: "",
     weekly_day: undefined as number | undefined,
     monthly_day: undefined as number | undefined,
     custom_pattern: "",
-    family_members: ['family'] as FamilyMember[],
+    family_members: [] as FamilyMember[],
   });
 
   // URL 쿼리 파라미터 처리
@@ -48,6 +50,7 @@ export default function SchedulePage() {
       const urlParams = new URLSearchParams(window.location.search);
       const dateParam = urlParams.get('date');
       const viewParam = urlParams.get('view');
+      const memberParam = urlParams.get('member');
       
       if (dateParam) {
         const today = new Date();
@@ -78,6 +81,12 @@ export default function SchedulePage() {
         if (viewParam === 'month') {
           setCurrentDate(new Date());
         }
+      }
+
+      // 가족 구성원 파라미터 처리
+      if (memberParam && Object.values(FAMILY_MEMBERS).includes(memberParam as FamilyMember)) {
+        setSelectedFamilyMembers([memberParam as FamilyMember]);
+        console.log('URL에서 가족 구성원 설정:', memberParam);
       }
     }
   }, []);
@@ -333,14 +342,16 @@ export default function SchedulePage() {
       title: "",
       description: "",
       frequency: "daily",
+      start_time: format(new Date(), 'HH:mm'),
+      end_time: format(new Date(new Date().getTime() + 60 * 60 * 1000), 'HH:mm'), // 현재 시간 + 1시간
       start_date: startDate,
       end_date: format(endDate, 'yyyy-MM-dd'), // 시작일로부터 3개월 후
       weekly_day: undefined,
       monthly_day: undefined,
       custom_pattern: "",
-      family_members: ['family'],
+      family_members: [],
     });
-    setSelectedFamilyMembers(['family']);
+    setSelectedFamilyMembers([]);
     setEditingSchedule(null);
   };
 
@@ -361,6 +372,8 @@ export default function SchedulePage() {
         title: formData.title,
         description: formData.description || undefined,
         frequency: formData.frequency,
+        start_time: formData.start_time,
+        end_time: formData.end_time,
         start_date: formData.start_date,
         end_date: formData.end_date || undefined,
         weekly_day: formData.weekly_day || undefined,
@@ -416,6 +429,8 @@ export default function SchedulePage() {
       title: schedule.title,
       description: schedule.description || "",
       frequency: schedule.frequency,
+      start_time: schedule.start_time || format(new Date(), 'HH:mm'),
+      end_time: schedule.end_time || format(new Date(new Date().getTime() + 60 * 60 * 1000), 'HH:mm'),
       start_date: schedule.start_date,
       end_date: schedule.end_date || "",
       weekly_day: schedule.weekly_day || undefined,
@@ -545,13 +560,34 @@ export default function SchedulePage() {
     
     // 먼저 선택된 가족 구성원에 따라 일정을 필터링
     let availableSchedules = schedules;
-    if (!selectedFamilyMembers.includes('family')) {
+    
+    if (selectedFamilyMembers.includes('family')) {
+      // 가족이 선택된 경우: family로 등록된 일정 + 선택된 개별 구성원의 일정 모두 병합해서 표시
+      const otherMembers = selectedFamilyMembers.filter(m => m !== 'family');
+      
+      availableSchedules = schedules.filter(schedule => {
+        if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
+          return false;
+        }
+        
+        // family로 등록된 일정이거나 선택된 개별 구성원의 일정인 경우 모두 포함
+        const isFamilyMatch = schedule.family_members.includes('family');
+        const isOtherMemberMatch = otherMembers.length > 0 ? 
+          schedule.family_members.some(member => otherMembers.includes(member)) : false;
+        
+        return isFamilyMatch || isOtherMemberMatch;
+      });
+    } else if (selectedFamilyMembers.length > 0) {
+      // 개별 구성원만 선택된 경우
       availableSchedules = schedules.filter(schedule => {
         if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
           return false;
         }
         return schedule.family_members.some(member => selectedFamilyMembers.includes(member));
       });
+    } else {
+      // 아무것도 선택되지 않은 경우: 모든 일정 표시 (기본값)
+      availableSchedules = schedules;
     }
     
     const filteredSchedules = availableSchedules.filter(schedule => {
@@ -755,6 +791,13 @@ export default function SchedulePage() {
     return `${day}일`;
   };
 
+  // 시간을 HH:MM 형식으로 포맷팅하는 함수
+  const formatTime = (timeString: string) => {
+    if (!timeString) return '';
+    // HH:MM:SS 형식에서 HH:MM만 추출
+    return timeString.substring(0, 5);
+  };
+
   const handleFrequencyChange = (frequency: Schedule['frequency']) => {
     setFormData(prev => ({
       ...prev,
@@ -790,10 +833,46 @@ export default function SchedulePage() {
     let filteredSchedules;
     
     if (selectedFamilyMembers.includes('family')) {
-      console.log('가족 선택: 모든 일정 표시', schedules.length, '개');
-      filteredSchedules = [...schedules]; // 가족 선택 시 모든 일정 표시
-    } else {
-      // 선택된 구성원의 일정만 필터링
+      // 가족이 선택된 경우: family로 등록된 일정 + 선택된 개별 구성원의 일정 모두 병합해서 표시
+      const otherMembers = selectedFamilyMembers.filter(m => m !== 'family');
+      console.log('가족 선택 (개별 구성원과 함께):', otherMembers);
+      
+      // 모든 조건에 맞는 일정을 수집
+      const allMatchingSchedules = [];
+      
+      schedules.forEach(schedule => {
+        if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
+          return;
+        }
+        
+        // family로 등록된 일정이거나 선택된 개별 구성원의 일정인 경우 모두 포함
+        const isFamilyMatch = schedule.family_members.includes('family');
+        const isOtherMemberMatch = otherMembers.length > 0 ? 
+          schedule.family_members.some(member => otherMembers.includes(member)) : false;
+        
+        // 가족이 선택되었으면 family로 등록된 일정은 항상 포함
+        // 추가로 개별 구성원이 선택되었다면 해당 구성원의 일정도 포함
+        if (isFamilyMatch || isOtherMemberMatch) {
+          allMatchingSchedules.push(schedule);
+          console.log('일정 포함:', schedule.title, {
+            family_members: schedule.family_members,
+            isFamilyMatch,
+            isOtherMemberMatch,
+            reason: isFamilyMatch && isOtherMemberMatch ? '가족+개별구성원' : 
+                   isFamilyMatch ? '가족' : '개별구성원'
+          });
+        }
+      });
+      
+      // 중복 제거 (같은 일정이 여러 조건에 맞을 수 있음)
+      const uniqueSchedules = allMatchingSchedules.filter((schedule, index, self) => 
+        index === self.findIndex(s => s.id === schedule.id)
+      );
+      
+      filteredSchedules = uniqueSchedules;
+      console.log('가족 선택 시', filteredSchedules.length, '개 일정 (family + 선택된 구성원 일정 병합)');
+    } else if (selectedFamilyMembers.length > 0) {
+      // 개별 구성원만 선택된 경우
       filteredSchedules = schedules.filter(schedule => {
         if (!schedule.family_members || !Array.isArray(schedule.family_members)) {
           console.log('일정 제외 (family_members 없음):', schedule.title);
@@ -811,6 +890,10 @@ export default function SchedulePage() {
       });
       
       console.log('필터링 결과:', selectedFamilyMembers, '선택 시', filteredSchedules.length, '개 일정');
+    } else {
+      // 아무것도 선택되지 않은 경우: 모든 일정 표시 (기본값)
+      console.log('아무것도 선택되지 않음: 모든 일정 표시 (기본값)');
+      filteredSchedules = [...schedules];
     }
     
     // 정렬 적용
@@ -921,27 +1004,30 @@ export default function SchedulePage() {
   // 가족 구성원 토글 핸들러
   const handleFamilyMemberToggle = (member: FamilyMember) => {
     if (member === 'family') {
-      // 가족 선택 시 다른 모든 선택 해제
+      // 가족 선택 시 모든 구성원의 일정을 병합해서 표시
       const isCurrentlySelected = selectedFamilyMembers.includes('family');
       if (isCurrentlySelected) {
-        setSelectedFamilyMembers([]);
-        setFormData(prev => ({ ...prev, family_members: [] }));
+        // 가족 선택 해제
+        const newMembers = selectedFamilyMembers.filter(m => m !== 'family');
+        setSelectedFamilyMembers(newMembers);
+        setFormData(prev => ({ ...prev, family_members: newMembers }));
       } else {
-        setSelectedFamilyMembers(['family']);
-        setFormData(prev => ({ ...prev, family_members: ['family'] }));
+        // 가족 선택 추가
+        const newSelectedMembers = [...selectedFamilyMembers, 'family'];
+        setSelectedFamilyMembers(newSelectedMembers);
+        setFormData(prev => ({ ...prev, family_members: newSelectedMembers }));
       }
     } else {
-      // 개별 구성원 선택 시 가족 선택 해제
+      // 개별 구성원 선택 시
       const isCurrentlySelected = selectedFamilyMembers.includes(member);
       if (isCurrentlySelected) {
         // 현재 선택된 구성원 해제
-        const newMembers = (selectedFamilyMembers || []).filter(m => m !== member);
+        const newMembers = selectedFamilyMembers.filter(m => m !== member);
         setSelectedFamilyMembers(newMembers);
         setFormData(prev => ({ ...prev, family_members: newMembers }));
       } else {
         // 새로운 구성원 추가
-        const newMembers = (selectedFamilyMembers || []).filter(m => m !== 'family');
-        const newSelectedMembers = [...newMembers, member];
+        const newSelectedMembers = [...selectedFamilyMembers, member];
         setSelectedFamilyMembers(newSelectedMembers);
         setFormData(prev => ({ ...prev, family_members: newSelectedMembers }));
       }
@@ -974,7 +1060,14 @@ export default function SchedulePage() {
           <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
             <h3 className="text-lg font-semibold text-gray-900 mb-3">가족 구성원별 일정 보기</h3>
             <div className="flex flex-wrap gap-3">
-              {Object.entries(FAMILY_MEMBERS).map(([key, value]) => {
+              {/* 가족 구성원 버튼들 - 원하는 순서대로 배열 */}
+              {[
+                FAMILY_MEMBERS.FAMILY,
+                FAMILY_MEMBERS.MOM,
+                FAMILY_MEMBERS.SEIN,
+                FAMILY_MEMBERS.SEHA,
+                FAMILY_MEMBERS.DAD
+              ].map((value) => {
                 const isSelected = selectedFamilyMembers.includes(value);
                 return (
                   <button
@@ -999,8 +1092,11 @@ export default function SchedulePage() {
               })}
             </div>
             <div className="mt-3 text-sm text-gray-600">
-              선택된 구성원: {selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')}
-              {selectedFamilyMembers.includes('family') && ' (모든 일정 표시)'}
+              선택된 구성원: {
+                selectedFamilyMembers.length > 0
+                  ? selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')
+                  : '전체 (모든 구성원의 일정 표시)'
+              }
             </div>
           </div>
 
@@ -1053,7 +1149,13 @@ export default function SchedulePage() {
                         대상 구성원
                       </label>
                       <div className="grid grid-cols-2 gap-2">
-                        {Object.entries(FAMILY_MEMBERS).map(([key, value]) => {
+                        {[
+                          FAMILY_MEMBERS.FAMILY,
+                          FAMILY_MEMBERS.MOM,
+                          FAMILY_MEMBERS.SEIN,
+                          FAMILY_MEMBERS.SEHA,
+                          FAMILY_MEMBERS.DAD
+                        ].map((value) => {
                           const isSelected = formData.family_members.includes(value);
                           return (
                             <button
@@ -1353,6 +1455,34 @@ export default function SchedulePage() {
 
                     <div>
                       <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        시작 시간
+                      </label>
+                      <Input
+                        type="time"
+                        value={formData.start_time}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          start_time: e.target.value
+                        })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
+                        종료 시간
+                      </label>
+                      <Input
+                        type="time"
+                        value={formData.end_time}
+                        onChange={(e) => setFormData({
+                          ...formData, 
+                          end_time: e.target.value
+                        })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 mb-2 block">
                         시작일
                       </label>
                       <Input
@@ -1559,6 +1689,10 @@ export default function SchedulePage() {
                   <div className="text-right">
                     <div className="flex flex-col space-y-1">
                       <div className="flex items-center space-x-1">
+                        <div className="w-4 h-4 bg-blue-50 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">🕐</div>
+                        <span>Time</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
                         <div className="w-4 h-4 bg-green-50 text-green-700 rounded-full flex items-center justify-center text-xs font-bold">C</div>
                         <span>Complete</span>
                       </div>
@@ -1643,12 +1777,19 @@ export default function SchedulePage() {
                                                 <div className="space-y-1 max-h-[60px] sm:max-h-[80px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
                           {daySchedules.length > 0 ? (
                             <div className="block sm:hidden">
-                              {/* 모바일: 완료/미완료 개수 표시 */}
+                              {/* 모바일: 시간 정보와 완료/미완료 개수 표시 */}
                               {(() => {
                                 const completedCount = daySchedules.filter(schedule => isScheduleCompleted(schedule.id, date)).length;
                                 const incompleteCount = daySchedules.length - completedCount;
+                                const hasTimeInfo = daySchedules.some(schedule => schedule.start_time);
+                                
                                 return (
                                   <div className="text-xs space-y-1">
+                                    {hasTimeInfo && (
+                                      <div className="text-center py-1 bg-blue-50 text-blue-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                        🕐
+                                      </div>
+                                    )}
                                     {completedCount > 0 && (
                                       <div className="text-center py-1 bg-green-50 text-green-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
                                         C{completedCount}
@@ -1664,38 +1805,46 @@ export default function SchedulePage() {
                               })()}
                             </div>
                           ) : null}
-                          <div className="hidden sm:block">
-                            {/* 데스크톱: 기존 표시 */}
-                            {daySchedules.map(schedule => {
-                              const isCompleted = isScheduleCompleted(schedule.id, date);
-                              return (
-                                <div
-                                  key={schedule.id}
-                                  className={`flex items-center justify-between p-2 rounded border text-xs ${
-                                    isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-                                  }`}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <div className="flex items-center space-x-1 min-w-0 flex-1">
-                                    <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                                      {getFrequencyShortLabel(schedule.frequency)}
-                                    </Badge>
-                                    <span className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                                      {schedule.title}
-                                    </span>
+                                                      <div className="hidden sm:block">
+                              {/* 데스크톱: 시간 정보 포함하여 표시 */}
+                              {daySchedules.map(schedule => {
+                                const isCompleted = isScheduleCompleted(schedule.id, date);
+                                return (
+                                  <div
+                                    key={schedule.id}
+                                    className={`flex items-center justify-between p-2 rounded border text-xs ${
+                                      isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+                                    }`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="flex items-center space-x-1 min-w-0 flex-1">
+                                      <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
+                                        {getFrequencyShortLabel(schedule.frequency)}
+                                      </Badge>
+                                      <div className="min-w-0 flex-1">
+                                        <div className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                          {schedule.title}
+                                        </div>
+                                        {schedule.start_time && (
+                                          <div className="text-xs text-gray-500 mt-1">
+                                            🕐 {formatTime(schedule.start_time)}
+                                            {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-1 flex-shrink-0">
+                                      <input
+                                        type="checkbox"
+                                        checked={isCompleted}
+                                        onChange={() => handleToggleComplete(schedule.id, date)}
+                                        className="h-3 w-3 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="flex items-center space-x-1 flex-shrink-0">
-                                    <input
-                                      type="checkbox"
-                                      checked={isCompleted}
-                                      onChange={() => handleToggleComplete(schedule.id, date)}
-                                      className="h-3 w-3 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
+                                );
+                              })}
+                            </div>
                         </div>
                       </div>
                     );
@@ -1740,8 +1889,15 @@ export default function SchedulePage() {
                             {(() => {
                               const completedCount = daySchedules.filter(schedule => isScheduleCompleted(schedule.id, date)).length;
                               const incompleteCount = daySchedules.length - completedCount;
+                              const hasTimeInfo = daySchedules.some(schedule => schedule.start_time);
+                              
                               return (
                                 <div className="text-xs space-y-1">
+                                  {hasTimeInfo && (
+                                    <div className="text-center py-1 bg-blue-50 text-blue-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                      🕐
+                                    </div>
+                                  )}
                                   {completedCount > 0 && (
                                     <div className="text-center py-1 bg-green-50 text-green-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
                                       C{completedCount}
@@ -1772,9 +1928,17 @@ export default function SchedulePage() {
                                   <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
                                     {getFrequencyShortLabel(schedule.frequency)}
                                   </Badge>
-                                  <span className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
-                                    {schedule.title}
-                                  </span>
+                                  <div className="min-w-0 flex-1">
+                                    <div className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
+                                      {schedule.title}
+                                    </div>
+                                    {schedule.start_time && (
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        🕐 {formatTime(schedule.start_time)}
+                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex items-center space-x-1 flex-shrink-0">
                                   <input
@@ -1834,6 +1998,14 @@ export default function SchedulePage() {
                             <h4 className={`font-medium truncate ${isCompleted ? 'line-through text-gray-500' : ''}`}>
                               {schedule.title}
                             </h4>
+                            <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                              {schedule.start_time && (
+                                <span>🕐 {formatTime(schedule.start_time)}</span>
+                              )}
+                              {schedule.end_time && (
+                                <span>~ {formatTime(schedule.end_time)}</span>
+                              )}
+                            </div>
                             {schedule.description && (
                               <p className={`text-sm truncate ${isCompleted ? 'text-gray-400' : 'text-gray-600'}`}>
                                 {schedule.description}
@@ -1897,7 +2069,7 @@ export default function SchedulePage() {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">
                   {getCurrentPeriodTitle()}
-                  {!selectedFamilyMembers.includes('family') && (
+                  {selectedFamilyMembers.length > 0 && !selectedFamilyMembers.includes('family') && (
                     <span className="text-sm font-normal text-gray-600 ml-2">
                       ({selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')})
                     </span>
@@ -1920,25 +2092,31 @@ export default function SchedulePage() {
                           <CalendarIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
                           <div className="min-w-0 flex-1">
                             <h4 className="font-medium text-gray-900 truncate">{schedule.title}</h4>
-                            <div className="flex items-center space-x-2 mt-1">
-                              <Badge className={`text-xs ${getFrequencyColor(schedule.frequency)}`}>
-                                {getPatternDetail(schedule)}
-                              </Badge>
-                              {/* 가족 구성원 배지들 */}
-                              <div className="flex space-x-1">
-                                {schedule.family_members && Array.isArray(schedule.family_members) ? 
-                                  schedule.family_members.map(member => (
-                                    <Badge key={member} className={`text-xs ${FAMILY_MEMBER_COLORS[member]}`}>
-                                      {FAMILY_MEMBER_LABELS[member]}
+                                                          <div className="flex items-center space-x-2 mt-1">
+                                <Badge className={`text-xs ${getFrequencyColor(schedule.frequency)}`}>
+                                  {getPatternDetail(schedule)}
+                                </Badge>
+                                {schedule.start_time && (
+                                  <span className="text-xs text-gray-500">🕐 {formatTime(schedule.start_time)}</span>
+                                )}
+                                {schedule.end_time && (
+                                  <span className="text-xs text-gray-500">~ {formatTime(schedule.end_time)}</span>
+                                )}
+                                {/* 가족 구성원 배지들 */}
+                                <div className="flex space-x-1">
+                                  {schedule.family_members && Array.isArray(schedule.family_members) ? 
+                                    schedule.family_members.map(member => (
+                                      <Badge key={member} className={`text-xs ${FAMILY_MEMBER_COLORS[member]}`}>
+                                        {FAMILY_MEMBER_LABELS[member]}
+                                      </Badge>
+                                    ))
+                                    : 
+                                    <Badge className="text-xs bg-blue-100 text-blue-800">
+                                      가족
                                     </Badge>
-                                  ))
-                                  : 
-                                  <Badge className="text-xs bg-blue-100 text-blue-800">
-                                    가족
-                                  </Badge>
-                                }
+                                  }
+                                </div>
                               </div>
-                            </div>
                           </div>
                         </div>
                         <div className="flex space-x-1" onClick={(e) => e.stopPropagation()}>
@@ -1965,7 +2143,7 @@ export default function SchedulePage() {
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">
                 등록된 일정 
-                {!selectedFamilyMembers.includes('family') && (
+                {selectedFamilyMembers.length > 0 && !selectedFamilyMembers.includes('family') && (
                   <span className="text-sm font-normal text-gray-600 ml-2">
                     ({selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')})
                   </span>
@@ -2047,6 +2225,12 @@ export default function SchedulePage() {
                   <div className="text-sm text-gray-600 space-y-2">
                     <div className="flex items-center space-x-4">
                       <p>시작일: {format(new Date(schedule.start_date), 'yyyy년 M월 d일')}</p>
+                      {schedule.start_time && (
+                        <p>시작시간: {formatTime(schedule.start_time)}</p>
+                      )}
+                      {schedule.end_time && (
+                        <p>종료시간: {formatTime(schedule.end_time)}</p>
+                      )}
                       {schedule.end_date && (
                         <p>종료일: {format(new Date(schedule.end_date), 'yyyy년 M월 d일')}</p>
                       )}
@@ -2077,9 +2261,13 @@ export default function SchedulePage() {
 
           {getFilteredSchedules().length === 0 && (
             <div className="text-center py-8 text-gray-500">
-              {selectedFamilyMembers.includes('family') 
-                ? '등록된 일정이 없습니다.'
-                : `선택된 구성원(${selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')})의 일정이 없습니다.`
+              {selectedFamilyMembers.includes('family')
+                ? selectedFamilyMembers.length === 1
+                  ? 'family로 등록된 일정이 없습니다.'
+                  : `가족 + ${selectedFamilyMembers.filter(m => m !== 'family').map(member => FAMILY_MEMBER_LABELS[member]).join(', ')}에 해당하는 일정이 없습니다.`
+                : selectedFamilyMembers.length > 0
+                  ? `선택된 구성원(${selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')})의 일정이 없습니다.`
+                  : '등록된 일정이 없습니다.'
               }
             </div>
           )}

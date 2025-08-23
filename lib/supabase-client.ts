@@ -126,6 +126,8 @@ export interface Schedule {
   title: string
   description?: string
   frequency: 'daily' | 'weekly' | 'monthly' | 'custom'
+  start_time: string
+  end_time: string
   start_date: string
   end_date?: string
   weekly_day?: number

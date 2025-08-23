@@ -6,8 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Calendar, List, Clock, ChefHat } from "lucide-react";
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { schedulesApi, Schedule, ScheduleCompletion } from "@/lib/supabase-client";
+import { schedulesApi, familyMealsApi, mealsApi, recipesApi, Schedule, ScheduleCompletion } from "@/lib/supabase-client";
 import Link from "next/link";
+
+// 시간을 HH:MM 형식으로 포맷팅하는 함수
+const formatTime = (timeString: string) => {
+  if (!timeString) return '';
+  // HH:MM:SS 형식에서 HH:MM만 추출
+  return timeString.substring(0, 5);
+};
 
 export default function Home() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -82,6 +89,79 @@ export default function Home() {
           todayUncompleted: 0,
           tomorrowUncompleted: 0,
         });
+
+        // 해야 할 일 통계 계산
+        if (schedulesData && schedulesData.length > 0) {
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+
+          // 각 날짜에 해당하는 일정들을 찾고, 완료되지 않은 것들의 수를 계산
+          const getApplicableSchedulesForDate = (date: Date) => {
+            return schedulesData.filter(schedule => {
+              const start = new Date(schedule.start_date);
+              const end = schedule.end_date ? new Date(schedule.end_date) : new Date(2100, 0, 1);
+              
+              // 날짜 범위 체크 (시간 제거하여 정확한 비교)
+              const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+              const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+              const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+              
+              if (checkDate < startDate || checkDate > endDate) return false;
+              
+              // 빈도별 필터링
+              switch (schedule.frequency) {
+                case 'daily':
+                  return true;
+                case 'weekly':
+                  if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
+                    let scheduleDay = schedule.weekly_day;
+                    if (scheduleDay >= 1 && scheduleDay <= 7) {
+                      scheduleDay = scheduleDay === 7 ? 0 : scheduleDay;
+                    }
+                    return date.getDay() === scheduleDay;
+                  }
+                  // 주차 기반
+                  const weekStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() - startDate.getDay());
+                  const currentWeekStart = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - checkDate.getDay());
+                  const weekDiff = Math.floor((currentWeekStart.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+                  return weekDiff >= 0 && weekDiff % 1 === 0;
+                case 'monthly':
+                  if (schedule.monthly_day !== null && schedule.monthly_day !== undefined) {
+                    return date.getDate() === schedule.monthly_day;
+                  }
+                  return date.getDate() === startDate.getDate();
+                case 'custom':
+                  return true; // 커스텀 패턴은 일단 모든 날짜에 적용
+                default:
+                  return false;
+              }
+            });
+          };
+
+          const yesterdayUncompleted = getApplicableSchedulesForDate(yesterday).length;
+          const todayUncompleted = getApplicableSchedulesForDate(today).length;
+          const tomorrowUncompleted = getApplicableSchedulesForDate(tomorrow).length;
+
+          setStats(prev => ({
+            ...prev,
+            yesterdayUncompleted,
+            todayUncompleted,
+            tomorrowUncompleted,
+          }));
+
+          console.log('해야 할 일 통계 계산 완료:', {
+            yesterdayUncompleted,
+            todayUncompleted,
+            tomorrowUncompleted,
+            totalSchedules: schedulesData.length,
+            today: today.toDateString(),
+            yesterday: yesterday.toDateString(),
+            tomorrow: tomorrow.toDateString()
+          });
+        }
         
       } catch (error) {
         console.error('데이터 로드 실패:', error);
@@ -103,142 +183,65 @@ export default function Home() {
     loadData();
   }, []);
 
-  // 일정 통계 계산 (완료 상태 고려)
+  // 추가 통계 데이터 로드 (가족식단, 메뉴, 레시피)
   useEffect(() => {
-    if (schedules.length === 0) return;
-
-    // 현재 시간 기준으로 정확한 날짜 계산
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 시간 제거
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    console.log('날짜 계산:', {
-      today: format(today, 'yyyy-MM-dd'),
-      yesterday: format(yesterday, 'yyyy-MM-dd'),
-      tomorrow: format(tomorrow, 'yyyy-MM-dd')
-    });
-
-    const getUncompletedCountForDate = async (date: Date) => {
+    console.log('=== 추가 통계 useEffect 실행됨 ===');
+    
+    const loadAdditionalStats = async () => {
       try {
-        const dateString = format(date, 'yyyy-MM-dd');
+        console.log('추가 통계 로드 시작...');
         
-        // 해당 날짜에 실행되어야 하는 일정들을 정확히 계산
-        const applicableSchedules = schedules.filter(schedule => {
-          const start = new Date(schedule.start_date);
-          const end = schedule.end_date ? new Date(schedule.end_date) : new Date(2100, 0, 1);
-          
-          // 날짜 범위 체크 (시간 제거하여 정확한 비교)
-          const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-          const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-          const endDate = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-          
-          if (checkDate < startDate || checkDate > endDate) return false;
-          
-          // 빈도별 필터링 (일정관리 페이지와 동일한 로직)
-          switch (schedule.frequency) {
-            case 'daily':
-              return true;
-            case 'weekly':
-              if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
-                let scheduleDay = schedule.weekly_day;
-                if (scheduleDay >= 1 && scheduleDay <= 7) {
-                  scheduleDay = scheduleDay === 7 ? 0 : scheduleDay;
-                }
-                return date.getDay() === scheduleDay;
-              }
-              // 주차 기반
-              const weekStart = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate() - startDate.getDay());
-              const currentWeekStart = new Date(checkDate.getFullYear(), checkDate.getMonth(), checkDate.getDate() - checkDate.getDay());
-              const weekDiff = Math.floor((currentWeekStart.getTime() - weekStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-              return weekDiff >= 0 && weekDiff % 1 === 0;
-            case 'monthly':
-              if (schedule.monthly_day !== null && schedule.monthly_day !== undefined) {
-                return date.getDate() === schedule.monthly_day;
-              }
-              return date.getDate() === startDate.getDate();
-            case 'custom':
-              if (schedule.custom_pattern) {
-                try {
-                  const pattern = JSON.parse(schedule.custom_pattern);
-                  switch (pattern.type) {
-                    case 'daily':
-                      return true;
-                    case 'interval':
-                      const daysDiff = Math.floor((checkDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
-                      return daysDiff >= 0 && daysDiff % pattern.interval === 0;
-                    case 'specific_days':
-                      return pattern.days?.includes(date.getDay()) || false;
-                    case 'weekday':
-                      const currentDay = date.getDay();
-                      return currentDay >= 1 && currentDay <= 5;
-                    case 'weekend':
-                      const day = date.getDay();
-                      return day === 0 || day === 6;
-                    default:
-                      return true;
-                  }
-                } catch (error) {
-                  return true;
-                }
-              }
-              return true;
-            default:
-              return false;
-          }
+        // 가족식단 통계
+        console.log('가족식단 통계 조회 시작...');
+        const familyMealsData = await familyMealsApi.getByMonth(new Date().getFullYear(), new Date().getMonth() + 1);
+        const totalFamilyMeals = familyMealsData ? familyMealsData.length : 0;
+        console.log('가족식단 데이터:', familyMealsData);
+
+        // 메뉴 통계
+        console.log('메뉴 통계 조회 시작...');
+        const mealsData = await mealsApi.getAll();
+        const totalMeals = mealsData ? mealsData.length : 0;
+        console.log('메뉴 데이터:', mealsData);
+
+        // 레시피 통계
+        console.log('레시피 통계 조회 시작...');
+        const recipesData = await recipesApi.getAll();
+        const totalRecipes = recipesData ? recipesData.length : 0;
+        console.log('레시피 데이터:', recipesData);
+
+        setStats(prev => ({
+          ...prev,
+          totalFamilyMeals,
+          totalMeals,
+          totalRecipes,
+        }));
+
+        console.log('추가 통계 로드 완료:', {
+          totalFamilyMeals,
+          totalMeals,
+          totalRecipes,
         });
-        
-        if (applicableSchedules.length === 0) {
-          console.log(`${dateString}: 실행 가능한 일정 없음`);
-          return 0;
-        }
-        
-        const scheduleIds = applicableSchedules.map(s => s.id);
-        
-        // 해당 날짜의 완료 상태 일괄 조회
-        const completions = await schedulesApi.getCompletionStatuses(scheduleIds, dateString, dateString);
-        
-        // 완료되지 않은 일정 수 계산
-        const uncompletedCount = applicableSchedules.filter(schedule => {
-          const completion = completions.find(c => c.schedule_id === schedule.id);
-          return !completion || !completion.completed;
-        }).length;
-        
-        console.log(`${dateString}: 실행 가능 일정 ${applicableSchedules.length}개, 미완료 ${uncompletedCount}개`);
-        
-        return uncompletedCount;
       } catch (error) {
-        console.error(`${format(date, 'yyyy-MM-dd')} 완료 상태 조회 실패:`, error);
-        return 0;
+        console.error('추가 통계 로드 실패:', error);
+        console.error('에러 상세:', {
+          name: error instanceof Error ? error.name : 'Unknown',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
       }
     };
 
-    // 비동기로 통계 계산
-    const calculateStats = async () => {
-      const [yesterdayCount, todayCount, tomorrowCount] = await Promise.all([
-        getUncompletedCountForDate(yesterday),
-        getUncompletedCountForDate(today),
-        getUncompletedCountForDate(tomorrow)
-      ]);
+    // 즉시 실행
+    loadAdditionalStats();
+    
+    // 추가로 1초 후에도 실행 (혹시 타이밍 문제가 있을 수 있음)
+    const timer = setTimeout(() => {
+      console.log('타이머로 추가 통계 로드 실행');
+      loadAdditionalStats();
+    }, 1000);
 
-      console.log('최종 통계:', {
-        yesterday: yesterdayCount,
-        today: todayCount,
-        tomorrow: tomorrowCount
-      });
-
-      setStats(prev => ({
-        ...prev,
-        yesterdayUncompleted: yesterdayCount,
-        todayUncompleted: todayCount,
-        tomorrowUncompleted: tomorrowCount,
-      }));
-    };
-
-    calculateStats();
-  }, [schedules]);
+    return () => clearTimeout(timer);
+  }, []);
 
   const features = [
     {
@@ -289,178 +292,228 @@ export default function Home() {
                 의미있는 하루
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                  <div className="text-orange-600 font-semibold mb-2 text-center">👨‍👩‍👧‍👦 Family</div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {isLoading ? (
-                      <div className="text-gray-400">로딩 중...</div>
-                    ) : memberSchedules['family'] && memberSchedules['family'].length > 0 ? (
-                      memberSchedules['family'].slice(0, 3).map((schedule, index) => {
-                        console.log(`Family 일정 ${index} 상세:`, {
-                          title: schedule.title,
-                          completed: schedule.completed,
-                          family_members: schedule.family_members,
-                          frequency: schedule.frequency,
-                          start_date: schedule.start_date,
-                          end_date: schedule.end_date
-                        });
-                        return (
-                          <div key={index} className="flex items-center space-x-2">
-                            {schedule.completed ? (
-                              <>
-                                <span className="text-green-500">✅</span>
-                                <span className="line-through text-gray-400">{schedule.title}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-blue-400">🚀</span>
-                                <span className="text-gray-600">{schedule.title}</span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-gray-400">오늘 할일이 없습니다</div>
-                    )}
+                <Link href="/schedule?member=family&view=day" className="block">
+                  <div className="bg-orange-50 rounded-lg p-4 border border-orange-200 hover:bg-orange-100 transition-colors cursor-pointer">
+                    <div className="text-orange-600 font-semibold mb-2 text-center">👨‍👩‍👧‍👦 Family</div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      {isLoading ? (
+                        <div className="text-gray-400">로딩 중...</div>
+                      ) : memberSchedules['family'] && memberSchedules['family'].length > 0 ? (
+                        memberSchedules['family'].slice(0, 3).map((schedule, index) => {
+                          console.log(`Family 일정 ${index} 상세:`, {
+                            title: schedule.title,
+                            completed: schedule.completed,
+                            family_members: schedule.family_members,
+                            frequency: schedule.frequency,
+                            start_date: schedule.start_date,
+                            end_date: schedule.end_date
+                          });
+                          return (
+                            <div key={index} className="mb-2">
+                              <div className="flex items-center space-x-2">
+                                {schedule.completed ? (
+                                  <>
+                                    <span className="text-green-500">✅</span>
+                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-blue-400">🚀</span>
+                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                  </>
+                                )}
+                              </div>
+                              {(schedule as any).start_time && (
+                                <div className="text-xs text-gray-400 ml-6 mt-1">
+                                  🕐 {formatTime((schedule as any).start_time)}
+                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-gray-400">오늘 할일이 없습니다</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="bg-pink-50 rounded-lg p-4 border border-pink-200">
-                  <div className="text-pink-600 font-semibold mb-2 text-center">👩 엄마</div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {isLoading ? (
-                      <div className="text-gray-400">로딩 중...</div>
-                    ) : memberSchedules['mom'] && memberSchedules['mom'].length > 0 ? (
-                      memberSchedules['mom'].slice(0, 3).map((schedule, index) => {
-                        console.log(`Mom 일정 ${index} 상세:`, {
-                          title: schedule.title,
-                          completed: schedule.completed,
-                          family_members: schedule.family_members,
-                          frequency: schedule.frequency
-                        });
-                        return (
-                          <div key={index} className="flex items-center space-x-2">
-                            {schedule.completed ? (
-                              <>
-                                <span className="text-green-500">✅</span>
-                                <span className="line-through text-gray-400">{schedule.title}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-blue-400">🚀</span>
-                                <span className="text-gray-600">{schedule.title}</span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-gray-400">오늘 할일이 없습니다</div>
-                    )}
+                </Link>
+                <Link href="/schedule?member=mom&view=day" className="block">
+                  <div className="bg-pink-50 rounded-lg p-4 border border-pink-200 hover:bg-pink-100 transition-colors cursor-pointer">
+                    <div className="text-pink-600 font-semibold mb-2 text-center">👩 엄마</div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      {isLoading ? (
+                        <div className="text-gray-400">로딩 중...</div>
+                      ) : memberSchedules['mom'] && memberSchedules['mom'].length > 0 ? (
+                        memberSchedules['mom'].slice(0, 3).map((schedule, index) => {
+                          console.log(`Mom 일정 ${index} 상세:`, {
+                            title: schedule.title,
+                            completed: schedule.completed,
+                            family_members: schedule.family_members,
+                            frequency: schedule.frequency
+                          });
+                          return (
+                            <div key={index} className="mb-2">
+                              <div className="flex items-center space-x-2">
+                                {schedule.completed ? (
+                                  <>
+                                    <span className="text-green-500">✅</span>
+                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-blue-400">🚀</span>
+                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                  </>
+                                )}
+                              </div>
+                              {(schedule as any).start_time && (
+                                <div className="text-xs text-gray-400 ml-6 mt-1">
+                                  🕐 {formatTime((schedule as any).start_time)}
+                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-gray-400">오늘 할일이 없습니다</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                  <div className="text-blue-600 font-semibold mb-2 text-center">👨 세인</div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {isLoading ? (
-                      <div className="text-gray-400">로딩 중...</div>
-                    ) : memberSchedules['sein'] && memberSchedules['sein'].length > 0 ? (
-                      memberSchedules['sein'].slice(0, 3).map((schedule, index) => {
-                        console.log(`Sein 일정 ${index} 상세:`, {
-                          title: schedule.title,
-                          completed: schedule.completed,
-                          family_members: schedule.family_members,
-                          frequency: schedule.frequency
-                        });
-                        return (
-                          <div key={index} className="flex items-center space-x-2">
-                            {schedule.completed ? (
-                              <>
-                                <span className="text-green-500">✅</span>
-                                <span className="line-through text-gray-400">{schedule.title}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-blue-400">🚀</span>
-                                <span className="text-gray-600">{schedule.title}</span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-gray-400">오늘 할일이 없습니다</div>
-                    )}
+                </Link>
+                <Link href="/schedule?member=sein&view=day" className="block">
+                  <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer">
+                    <div className="text-blue-600 font-semibold mb-2 text-center">👨 세인</div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      {isLoading ? (
+                        <div className="text-gray-400">로딩 중...</div>
+                      ) : memberSchedules['sein'] && memberSchedules['sein'].length > 0 ? (
+                        memberSchedules['sein'].slice(0, 3).map((schedule, index) => {
+                          console.log(`Sein 일정 ${index} 상세:`, {
+                            title: schedule.title,
+                            completed: schedule.completed,
+                            family_members: schedule.family_members,
+                            frequency: schedule.frequency
+                          });
+                          return (
+                            <div key={index} className="mb-2">
+                              <div className="flex items-center space-x-2">
+                                {schedule.completed ? (
+                                  <>
+                                    <span className="text-green-500">✅</span>
+                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-blue-400">🚀</span>
+                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                  </>
+                                )}
+                              </div>
+                              {(schedule as any).start_time && (
+                                <div className="text-xs text-gray-400 ml-6 mt-1">
+                                  🕐 {formatTime((schedule as any).start_time)}
+                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-gray-400">오늘 할일이 없습니다</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div className="text-green-600 font-semibold mb-2 text-center">👧 세하</div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {isLoading ? (
-                      <div className="text-gray-400">로딩 중...</div>
-                    ) : memberSchedules['seha'] && memberSchedules['seha'].length > 0 ? (
-                      memberSchedules['seha'].slice(0, 3).map((schedule, index) => {
-                        console.log(`Seha 일정 ${index} 상세:`, {
-                          title: schedule.title,
-                          completed: schedule.completed,
-                          family_members: schedule.family_members,
-                          frequency: schedule.frequency
-                        });
-                        return (
-                          <div key={index} className="flex items-center space-x-2">
-                            {schedule.completed ? (
-                              <>
-                                <span className="text-green-500">✅</span>
-                                <span className="line-through text-gray-400">{schedule.title}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-blue-400">🚀</span>
-                                <span className="text-gray-600">{schedule.title}</span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-gray-400">오늘 할일이 없습니다</div>
-                    )}
+                </Link>
+                <Link href="/schedule?member=seha&view=day" className="block">
+                  <div className="bg-green-50 rounded-lg p-4 border border-green-200 hover:bg-green-100 transition-colors cursor-pointer">
+                    <div className="text-green-600 font-semibold mb-2 text-center">👧 세하</div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      {isLoading ? (
+                        <div className="text-gray-400">로딩 중...</div>
+                      ) : memberSchedules['seha'] && memberSchedules['seha'].length > 0 ? (
+                        memberSchedules['seha'].slice(0, 3).map((schedule, index) => {
+                          console.log(`Seha 일정 ${index} 상세:`, {
+                            title: schedule.title,
+                            completed: schedule.completed,
+                            family_members: schedule.family_members,
+                            frequency: schedule.frequency
+                          });
+                          return (
+                            <div key={index} className="mb-2">
+                              <div className="flex items-center space-x-2">
+                                {schedule.completed ? (
+                                  <>
+                                    <span className="text-green-500">✅</span>
+                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-blue-400">🚀</span>
+                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                  </>
+                                )}
+                              </div>
+                              {(schedule as any).start_time && (
+                                <div className="text-xs text-gray-400 ml-6 mt-1">
+                                  🕐 {formatTime((schedule as any).start_time)}
+                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-gray-400">오늘 할일이 없습니다</div>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="bg-red-50 rounded-lg p-4 border border-red-200">
-                  <div className="text-red-600 font-semibold mb-2 text-center">👨 아빠</div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    {isLoading ? (
-                      <div className="text-gray-400">로딩 중...</div>
-                    ) : memberSchedules['dad'] && memberSchedules['dad'].length > 0 ? (
-                      memberSchedules['dad'].slice(0, 3).map((schedule, index) => {
-                        console.log(`Dad 일정 ${index} 상세:`, {
-                          title: schedule.title,
-                          completed: schedule.completed,
-                          family_members: schedule.family_members,
-                          frequency: schedule.frequency
-                        });
-                        return (
-                          <div key={index} className="flex items-center space-x-2">
-                            {schedule.completed ? (
-                              <>
-                                <span className="text-green-500">✅</span>
-                                <span className="line-through text-gray-400">{schedule.title}</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-blue-400">🚀</span>
-                                <span className="text-gray-600">{schedule.title}</span>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="text-gray-400">오늘 할일이 없습니다</div>
-                    )}
+                </Link>
+                <Link href="/schedule?member=dad&view=day" className="block">
+                  <div className="bg-red-50 rounded-lg p-4 border border-red-200 hover:bg-red-100 transition-colors cursor-pointer">
+                    <div className="text-red-600 font-semibold mb-2 text-center">👨 아빠</div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      {isLoading ? (
+                        <div className="text-gray-400">로딩 중...</div>
+                      ) : memberSchedules['dad'] && memberSchedules['dad'].length > 0 ? (
+                        memberSchedules['dad'].slice(0, 3).map((schedule, index) => {
+                          console.log(`Dad 일정 ${index} 상세:`, {
+                            title: schedule.title,
+                            completed: schedule.completed,
+                            family_members: schedule.family_members,
+                            frequency: schedule.frequency
+                          });
+                          return (
+                            <div key={index} className="mb-2">
+                              <div className="flex items-center space-x-2">
+                                {schedule.completed ? (
+                                  <>
+                                    <span className="text-green-500">✅</span>
+                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <span className="text-blue-400">🚀</span>
+                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                  </>
+                                )}
+                              </div>
+                              {(schedule as any).start_time && (
+                                <div className="text-xs text-gray-400 ml-6 mt-1">
+                                  🕐 {formatTime((schedule as any).start_time)}
+                                  {(schedule as any).end_time && ` ~ ${formatTime((schedule as any).end_time)}`}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="text-gray-400">오늘 할일이 없습니다</div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
           </div>
@@ -489,45 +542,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 일정 통계 - 빠른 시작 위로 이동 */}
-        <div className="mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <Clock className="mr-2 h-5 w-5 text-orange-500" />
-                해야 할 일
-              </CardTitle>
-              <CardDescription>
-                어제, 오늘, 내일의 해야 할 일을 확인하세요
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Link href="/schedule?date=yesterday&view=day" className="block">
-                  <div className="text-center p-4 bg-red-50 rounded-lg hover:bg-red-100 transition-colors cursor-pointer group">
-                    <div className="text-2xl font-bold text-red-600 mb-1 group-hover:text-red-700">{stats.yesterdayUncompleted}</div>
-                    <div className="text-sm text-red-700 group-hover:text-red-800">어제</div>
-                    <div className="text-xs text-red-600 group-hover:text-red-700">했어야 할 일</div>
-                  </div>
-                </Link>
-                <Link href="/schedule?date=today&view=day" className="block">
-                  <div className="text-center p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors cursor-pointer group">
-                    <div className="text-2xl font-bold text-yellow-600 mb-1 group-hover:text-yellow-700">{stats.todayUncompleted}</div>
-                    <div className="text-sm text-yellow-700 group-hover:text-yellow-800">오늘</div>
-                    <div className="text-xs text-yellow-600 group-hover:text-yellow-700">아직 못한 일</div>
-                  </div>
-                </Link>
-                <Link href="/schedule?date=tomorrow&view=day" className="block">
-                  <div className="text-center p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer group">
-                    <div className="text-2xl font-bold text-blue-600 mb-1 group-hover:text-blue-700">{stats.tomorrowUncompleted}</div>
-                    <div className="text-sm text-blue-700 group-hover:text-blue-800">내일</div>
-                    <div className="text-xs text-blue-600 group-hover:text-blue-700">할 일</div>
-                  </div>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+
 
         {/* Quick Actions */}
         <div className="bg-white rounded-lg shadow-md p-6">

@@ -53,6 +53,15 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
+**중요**: 이 값들은 Supabase 프로젝트 대시보드의 Settings > API 섹션에서 찾을 수 있습니다.
+
+**환경 변수 설정 단계**:
+1. [Supabase](https://supabase.com)에 로그인
+2. 프로젝트 선택 또는 새 프로젝트 생성
+3. Settings > API 메뉴로 이동
+4. Project URL과 anon public key를 복사
+5. `.env.local` 파일에 붙여넣기
+
 ### 4. 데이터베이스 설정
 Supabase 대시보드에서 다음 SQL을 실행하여 테이블을 생성하세요:
 
