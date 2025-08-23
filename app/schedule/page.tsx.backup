@@ -299,6 +299,24 @@ export default function SchedulePage() {
     loadFamilyMeals();
   }, [currentDate, viewMode]);
 
+  // 시작시간이 변경될 때 종료시간을 자동으로 +1시간으로 설정
+  useEffect(() => {
+    if (formData.start_time) {
+      try {
+        const [startHour, startMinute] = formData.start_time.split(':').map(Number);
+        const endHour = (startHour + 1) % 24; // 24시간 형식으로 처리
+        const endTimeString = `${endHour.toString().padStart(2, '0')}:${startMinute.toString().padStart(2, '0')}`;
+        
+        setFormData(prev => ({
+          ...prev,
+          end_time: endTimeString
+        }));
+      } catch (error) {
+        console.error('종료시간 계산 오류:', error);
+      }
+    }
+  }, [formData.start_time]);
+
   const loadAllData = async () => {
     console.log('=== loadAllData 시작 ===');
     try {
@@ -367,6 +385,7 @@ export default function SchedulePage() {
     try {
       console.log('=== 일정 저장 시작 ===');
       console.log('폼 데이터:', formData);
+      console.log('weekly_day 값:', formData.weekly_day, '타입:', typeof formData.weekly_day);
       
       const scheduleData = {
         title: formData.title,
@@ -383,6 +402,7 @@ export default function SchedulePage() {
       };
       
       console.log('저장할 데이터:', scheduleData);
+      console.log('weekly_day 최종값:', scheduleData.weekly_day);
 
       if (editingSchedule) {
         console.log('기존 일정 수정:', editingSchedule.id);
@@ -424,6 +444,9 @@ export default function SchedulePage() {
   };
 
   const handleEdit = (schedule: Schedule) => {
+    console.log('일정 수정 시작:', schedule);
+    console.log('weekly_day 값:', schedule.weekly_day, '타입:', typeof schedule.weekly_day);
+    
     setEditingSchedule(schedule);
     setFormData({
       title: schedule.title,
@@ -433,11 +456,17 @@ export default function SchedulePage() {
       end_time: schedule.end_time || format(new Date(new Date().getTime() + 60 * 60 * 1000), 'HH:mm'),
       start_date: schedule.start_date,
       end_date: schedule.end_date || "",
-      weekly_day: schedule.weekly_day || undefined,
-      monthly_day: schedule.monthly_day || undefined,
+      weekly_day: schedule.weekly_day !== null && schedule.weekly_day !== undefined ? schedule.weekly_day : undefined,
+      monthly_day: schedule.monthly_day !== null && schedule.monthly_day !== undefined ? schedule.monthly_day : undefined,
       custom_pattern: schedule.custom_pattern || "",
       family_members: schedule.family_members || ['family'],
     });
+    
+    console.log('설정된 formData:', {
+      frequency: schedule.frequency,
+      weekly_day: schedule.weekly_day !== null && schedule.weekly_day !== undefined ? schedule.weekly_day : undefined
+    });
+    
     setSelectedFamilyMembers(schedule.family_members || ['family']);
     setIsDialogOpen(true);
   };
@@ -615,9 +644,19 @@ export default function SchedulePage() {
             const currentDay = date.getDay(); // 0(일요일) ~ 6(토요일)
             let scheduleDay = schedule.weekly_day;
             
+            console.log('주간 패턴 계산:', {
+              scheduleTitle: schedule.title,
+              scheduleWeeklyDay: schedule.weekly_day,
+              currentDate: date.toISOString().split('T')[0],
+              currentDay: currentDay,
+              scheduleDay: scheduleDay,
+              shouldInclude: currentDay === scheduleDay
+            });
+            
             // weekly_day가 1~7 범위인 경우 0~6으로 변환
             if (scheduleDay >= 1 && scheduleDay <= 7) {
               scheduleDay = scheduleDay === 7 ? 0 : scheduleDay; // 7(일요일)을 0으로 변환
+              console.log('weekly_day 변환 후:', scheduleDay);
             }
             
             shouldInclude = currentDay === scheduleDay;
@@ -1063,11 +1102,14 @@ export default function SchedulePage() {
               {/* 가족 구성원 버튼들 - 대시보드와 동일한 스타일 */}
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.FAMILY)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                  selectedFamilyMembers.includes(FAMILY_MEMBERS.FAMILY) 
-                    ? 'bg-orange-100 border-orange-300 shadow-lg scale-105' 
+                className={`
+                  p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105
+                  ${selectedFamilyMembers.includes(FAMILY_MEMBERS.FAMILY)
+                    ? 'bg-orange-100 border-orange-300 shadow-lg scale-105'
                     : 'bg-orange-50 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
-                }`}
+                  }
+                `}
+                title={selectedFamilyMembers.includes(FAMILY_MEMBERS.FAMILY) ? '클릭하여 해제' : '클릭하여 선택'}
               >
                 <div className="text-center">
                   <div className="text-2xl mb-2">👨‍👩‍👧‍👦</div>
@@ -1077,11 +1119,14 @@ export default function SchedulePage() {
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.MOM)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                  selectedFamilyMembers.includes(FAMILY_MEMBERS.MOM) 
-                    ? 'bg-pink-100 border-pink-300 shadow-lg scale-105' 
+                className={`
+                  p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105
+                  ${selectedFamilyMembers.includes(FAMILY_MEMBERS.MOM)
+                    ? 'bg-pink-100 border-pink-300 shadow-lg scale-105'
                     : 'bg-pink-50 border-pink-200 hover:bg-pink-100 hover:border-pink-300'
-                }`}
+                  }
+                `}
+                title={selectedFamilyMembers.includes(FAMILY_MEMBERS.MOM) ? '클릭하여 해제' : '클릭하여 선택'}
               >
                 <div className="text-center">
                   <div className="text-2xl mb-2">👩</div>
@@ -1091,11 +1136,14 @@ export default function SchedulePage() {
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.SEIN)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                  selectedFamilyMembers.includes(FAMILY_MEMBERS.SEIN) 
-                    ? 'bg-blue-100 border-blue-300 shadow-lg scale-105' 
+                className={`
+                  p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105
+                  ${selectedFamilyMembers.includes(FAMILY_MEMBERS.SEIN)
+                    ? 'bg-blue-100 border-blue-300 shadow-lg scale-105'
                     : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
-                }`}
+                  }
+                `}
+                title={selectedFamilyMembers.includes(FAMILY_MEMBERS.SEIN) ? '클릭하여 해제' : '클릭하여 선택'}
               >
                 <div className="text-center">
                   <div className="text-2xl mb-2">👨</div>
@@ -1105,11 +1153,14 @@ export default function SchedulePage() {
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.SEHA)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                  selectedFamilyMembers.includes(FAMILY_MEMBERS.SEHA) 
-                    ? 'bg-green-100 border-green-300 shadow-lg scale-105' 
+                className={`
+                  p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105
+                  ${selectedFamilyMembers.includes(FAMILY_MEMBERS.SEHA)
+                    ? 'bg-green-100 border-green-300 shadow-lg scale-105'
                     : 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
-                }`}
+                  }
+                `}
+                title={selectedFamilyMembers.includes(FAMILY_MEMBERS.SEHA) ? '클릭하여 해제' : '클릭하여 선택'}
               >
                 <div className="text-center">
                   <div className="text-2xl mb-2">👦</div>
@@ -1119,11 +1170,14 @@ export default function SchedulePage() {
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.DAD)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                  selectedFamilyMembers.includes(FAMILY_MEMBERS.DAD) 
-                    ? 'bg-red-100 border-red-300 shadow-lg scale-105' 
+                className={`
+                  p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105
+                  ${selectedFamilyMembers.includes(FAMILY_MEMBERS.DAD)
+                    ? 'bg-red-100 border-red-300 shadow-lg scale-105'
                     : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
-                }`}
+                  }
+                `}
+                title={selectedFamilyMembers.includes(FAMILY_MEMBERS.DAD) ? '클릭하여 해제' : '클릭하여 선택'}
               >
                 <div className="text-center">
                   <div className="text-2xl mb-2">👨</div>
@@ -1141,10 +1195,10 @@ export default function SchedulePage() {
           </div>
 
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">일정 관리</h1>
+            <h1 className="text-3xl font-bold text-gray-900">일정 관리</h1>
             <div className="flex space-x-2">
               <Button variant="outline" onClick={loadAllData}>
-                새로고침
+                데이터 새로고침
               </Button>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
@@ -1188,148 +1242,60 @@ export default function SchedulePage() {
                       <label className="text-sm font-medium text-gray-700 mb-2 block">
                         대상 구성원
                       </label>
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-                        {/* 가족 구성원 버튼들 - 대시보드와 동일한 스타일 */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const isSelected = formData.family_members.includes(FAMILY_MEMBERS.FAMILY);
-                            setFormData(prev => ({ 
-                              ...prev, 
-                              family_members: isSelected ? [] : ['family'] 
-                            }));
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                            formData.family_members.includes(FAMILY_MEMBERS.FAMILY) 
-                              ? 'bg-orange-100 border-orange-300 shadow-lg scale-105' 
-                              : 'bg-orange-50 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-2xl mb-2">👨‍👩‍👧‍👦</div>
-                            <div className="font-semibold text-orange-600">가족</div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const isSelected = formData.family_members.includes(FAMILY_MEMBERS.MOM);
-                            if (isSelected) {
-                              const newMembers = formData.family_members.filter(m => m !== FAMILY_MEMBERS.MOM);
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: newMembers 
-                              }));
-                            } else {
-                              const newMembers = formData.family_members.filter(m => m !== 'family');
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: [...newMembers, FAMILY_MEMBERS.MOM] 
-                              }));
-                            }
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                            formData.family_members.includes(FAMILY_MEMBERS.MOM) 
-                              ? 'bg-pink-100 border-pink-300 shadow-lg scale-105' 
-                              : 'bg-pink-50 border-pink-200 hover:bg-pink-100 hover:border-pink-300'
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-2xl mb-2">👩</div>
-                            <div className="font-semibold text-pink-600">엄마</div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const isSelected = formData.family_members.includes(FAMILY_MEMBERS.SEIN);
-                            if (isSelected) {
-                              const newMembers = formData.family_members.filter(m => m !== FAMILY_MEMBERS.SEIN);
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: newMembers 
-                              }));
-                            } else {
-                              const newMembers = formData.family_members.filter(m => m !== 'family');
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: [...newMembers, FAMILY_MEMBERS.SEIN] 
-                              }));
-                            }
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                            formData.family_members.includes(FAMILY_MEMBERS.SEIN) 
-                              ? 'bg-blue-100 border-blue-300 shadow-lg scale-105' 
-                              : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-2xl mb-2">👨</div>
-                            <div className="font-semibold text-blue-600">세인</div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const isSelected = formData.family_members.includes(FAMILY_MEMBERS.SEHA);
-                            if (isSelected) {
-                              const newMembers = formData.family_members.filter(m => m !== FAMILY_MEMBERS.SEHA);
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: newMembers 
-                              }));
-                            } else {
-                              const newMembers = formData.family_members.filter(m => m !== 'family');
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: [...newMembers, FAMILY_MEMBERS.SEHA] 
-                              }));
-                            }
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                            formData.family_members.includes(FAMILY_MEMBERS.SEHA) 
-                              ? 'bg-green-100 border-green-300 shadow-lg scale-105' 
-                              : 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-2xl mb-2">👦</div>
-                            <div className="font-semibold text-green-600">세하</div>
-                          </div>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const isSelected = formData.family_members.includes(FAMILY_MEMBERS.DAD);
-                            if (isSelected) {
-                              const newMembers = formData.family_members.filter(m => m !== FAMILY_MEMBERS.DAD);
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: newMembers 
-                              }));
-                            } else {
-                              const newMembers = formData.family_members.filter(m => m !== 'family');
-                              setFormData(prev => ({ 
-                                ...prev, 
-                                family_members: [...newMembers, FAMILY_MEMBERS.DAD] 
-                              }));
-                            }
-                          }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
-                            formData.family_members.includes(FAMILY_MEMBERS.DAD) 
-                              ? 'bg-red-100 border-red-300 shadow-lg scale-105' 
-                              : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
-                          }`}
-                        >
-                          <div className="text-center">
-                            <div className="text-2xl mb-2">👨</div>
-                            <div className="font-semibold text-red-600">아빠</div>
-                          </div>
-                        </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          FAMILY_MEMBERS.FAMILY,
+                          FAMILY_MEMBERS.MOM,
+                          FAMILY_MEMBERS.SEIN,
+                          FAMILY_MEMBERS.SEHA,
+                          FAMILY_MEMBERS.DAD
+                        ].map((value) => {
+                          const isSelected = formData.family_members.includes(value);
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => {
+                                if (value === 'family') {
+                                  // 가족 선택 시 다른 모든 선택 해제
+                                  setFormData(prev => ({ 
+                                    ...prev, 
+                                    family_members: isSelected ? [] : ['family'] 
+                                  }));
+                                } else {
+                                  // 개별 구성원 선택 시 가족 선택 해제
+                                  if (isSelected) {
+                                    const newMembers = formData.family_members.filter(m => m !== value);
+                                    setFormData(prev => ({ 
+                                      ...prev, 
+                                      family_members: newMembers 
+                                    }));
+                                  } else {
+                                    const newMembers = formData.family_members.filter(m => m !== 'family');
+                                    setFormData(prev => ({ 
+                                      ...prev, 
+                                      family_members: [...newMembers, value] 
+                                    }));
+                                  }
+                                }
+                              }}
+                              className={`
+                                p-3 rounded-lg font-medium text-sm transition-all duration-200 
+                                border-2 hover:scale-105 active:scale-95 text-center
+                                ${isSelected 
+                                  ? `${FAMILY_MEMBER_COLORS[value]} border-current shadow-lg` 
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                                }
+                              `}
+                              title={isSelected ? '클릭하여 해제' : '클릭하여 선택'}
+                            >
+                              {FAMILY_MEMBER_LABELS[value]}
+                              {isSelected && (
+                                <span className="ml-2 text-xs">✓</span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                       <div className="mt-3 text-sm text-gray-600">
                         선택된 구성원: {formData.family_members.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')}
@@ -2092,75 +2058,129 @@ export default function SchedulePage() {
           {/* 일별 뷰 */}
           {viewMode === 'day' && (
             <div className="mb-6" key={refreshKey}>
-              <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                <h3 className="text-lg font-semibold mb-2">
-                  {format(currentDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
-                </h3>
-                {/* 디버깅 정보 */}
-                <div className="text-xs text-gray-500 mb-2 p-2 bg-white rounded border">
-                  <div>현재 선택된 날짜: {format(currentDate, 'yyyy-MM-dd')}</div>
-                  <div>오늘 날짜: {format(new Date(), 'yyyy-MM-dd')}</div>
-                  <div>일정 수: {getSchedulesForDate(currentDate).length}개</div>
+              {/* 일별 뷰 헤더 */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl mb-6 border border-blue-100 shadow-sm">
+                <div className="text-center">
+                  <h3 className="text-2xl md:text-3xl font-bold text-gray-800 mb-3">
+                    {format(currentDate, 'yyyy년 M월 d일', { locale: ko })}
+                  </h3>
+                  <div className="text-lg md:text-xl font-semibold text-blue-600 mb-4">
+                    {format(currentDate, 'EEEE', { locale: ko })}
+                  </div>
+                  
+                  {/* 일정 요약 정보 */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white p-3 rounded-xl border border-blue-200">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {getSchedulesForDate(currentDate).length}
+                      </div>
+                      <div className="text-sm text-gray-600">전체 일정</div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-green-200">
+                      <div className="text-2xl font-bold text-green-600">
+                        {getSchedulesForDate(currentDate).filter(s => isScheduleCompleted(s.id, currentDate)).length}
+                      </div>
+                      <div className="text-sm text-gray-600">완료된 일정</div>
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border border-orange-200">
+                      <div className="text-2xl font-bold text-orange-600">
+                        {getSchedulesForDate(currentDate).filter(s => !isScheduleCompleted(s.id, currentDate)).length}
+                      </div>
+                      <div className="text-sm text-gray-600">진행중인 일정</div>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-2 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
+              </div>
+              
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
                   {getSchedulesForDate(currentDate).map(schedule => {
                     const isCompleted = isScheduleCompleted(schedule.id, currentDate);
                     return (
                       <div
                         key={schedule.id}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${
-                          isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'
+                        className={`p-4 rounded-xl border-2 shadow-sm transition-all duration-200 ${
+                          isCompleted 
+                            ? 'bg-green-50 border-green-200 shadow-green-100' 
+                            : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
                         }`}
                       >
-                        <div className="flex items-center space-x-3 min-w-0 flex-1">
-                          <Badge className={`flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                            {getFrequencyShortLabel(schedule.frequency)}
-                            {schedule.frequency === 'weekly' && schedule.weekly_day !== null && schedule.weekly_day !== undefined && 
-                              ` ${getWeeklyDayLabel(schedule.weekly_day)}`
-                            }
-                            {schedule.frequency === 'monthly' && schedule.monthly_day !== null && schedule.monthly_day !== undefined && 
-                              ` ${getMonthlyDayLabel(schedule.monthly_day)}`
-                            }
-                          </Badge>
-                          <div className="min-w-0 flex-1">
-                            <h4 className={`font-medium truncate ${isCompleted ? 'line-through text-gray-500' : ''}`}>
-                              {schedule.title}
-                            </h4>
-                            <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
-                              {schedule.start_time && (
-                                <span>🕐 {formatTime(schedule.start_time)}</span>
-                              )}
-                              {schedule.end_time && (
-                                <span>~ {formatTime(schedule.end_time)}</span>
-                              )}
-                            </div>
-                            {schedule.description && (
-                              <p className={`text-sm truncate ${isCompleted ? 'text-gray-400' : 'text-gray-600'}`}>
-                                {schedule.description}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2 flex-shrink-0">
-                          <div className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              checked={isCompleted}
-                              onChange={() => handleToggleComplete(schedule.id, currentDate)}
-                              className="h-4 w-4 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
-                              title={isCompleted ? '완료됨 - 클릭하여 미완료로 변경' : '미완료 - 클릭하여 완료로 변경'}
-                            />
-                            <span className="text-sm text-gray-600">
-                              {isCompleted ? '완료' : '미완료'}
-                            </span>
+                        {/* 상단: 배지와 제목 */}
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center space-x-2 min-w-0 flex-1">
+                            <Badge className={`flex-shrink-0 text-xs px-2 py-1 ${getFrequencyColor(schedule.frequency)}`}>
+                              {getFrequencyShortLabel(schedule.frequency)}
+                              {schedule.frequency === 'weekly' && schedule.weekly_day !== null && schedule.weekly_day !== undefined && 
+                                ` ${getWeeklyDayLabel(schedule.weekly_day)}`
+                              }
+                              {schedule.frequency === 'monthly' && schedule.monthly_day !== null && schedule.monthly_day !== undefined && 
+                                ` ${getMonthlyDayLabel(schedule.monthly_day)}`
+                              }
+                            </Badge>
                           </div>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEdit(schedule)}
+                            className="p-1 h-8 w-8 flex-shrink-0"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                        </div>
+
+                        {/* 제목 */}
+                        <h4 className={`font-semibold text-lg mb-2 break-words ${
+                          isCompleted ? 'line-through text-gray-500' : 'text-gray-800'
+                        }`}>
+                          {schedule.title}
+                        </h4>
+
+                        {/* 시간 정보 - 모바일 최적화 */}
+                        {(schedule.start_time || schedule.end_time) && (
+                          <div className="flex items-center space-x-1 text-sm text-gray-600 mb-2 bg-gray-50 px-3 py-2 rounded-lg">
+                            <span className="text-blue-500">🕐</span>
+                            <span className="font-medium">
+                              {schedule.start_time ? formatTime(schedule.start_time) : ''}
+                              {schedule.start_time && schedule.end_time ? ' ~ ' : ''}
+                              {schedule.end_time ? formatTime(schedule.end_time) : ''}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 설명 */}
+                        {schedule.description && (
+                          <p className={`text-sm text-gray-600 mb-3 break-words leading-relaxed ${
+                            isCompleted ? 'text-gray-400' : ''
+                          }`}>
+                            {schedule.description}
+                          </p>
+                        )}
+
+                        {/* 하단: 완료 상태 */}
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={isCompleted}
+                              onChange={() => handleToggleComplete(schedule.id, currentDate)}
+                              className="h-5 w-5 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer transition-colors"
+                              title={isCompleted ? '완료됨 - 클릭하여 미완료로 변경' : '미완료 - 클릭하여 완료로 변경'}
+                            />
+                            <span className={`text-sm font-medium ${
+                              isCompleted ? 'text-green-600' : 'text-gray-600'
+                            }`}>
+                              {isCompleted ? '완료됨' : '미완료'}
+                            </span>
+                          </div>
+                          
+                          {/* 가족 구성원 표시 */}
+                          {schedule.family_members && schedule.family_members.length > 0 && (
+                            <div className="flex items-center space-x-1">
+                              <span className="text-xs text-gray-400">👥</span>
+                              <span className="text-xs text-gray-500">
+                                {schedule.family_members.join(', ')}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -2187,7 +2207,6 @@ export default function SchedulePage() {
                   )}
                 </div>
               </div>
-
             </div>
           )}
 
@@ -2211,7 +2230,7 @@ export default function SchedulePage() {
                 {getCurrentPeriodSchedules().map((schedule) => (
                   <Card 
                     key={schedule.id} 
-                    className="hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer border border-blue-200 bg-blue-50"
+                    className="hover:shadow-md hover:scale-105 transition-all duration-200 cursor-pointer border border-blue-200 bg-blue-50"
                     onClick={() => handleEdit(schedule)}
                   >
                     <CardContent className="p-4">
@@ -2220,31 +2239,31 @@ export default function SchedulePage() {
                           <CalendarIcon className="h-4 w-4 text-blue-500 flex-shrink-0" />
                           <div className="min-w-0 flex-1">
                             <h4 className="font-medium text-gray-900 truncate">{schedule.title}</h4>
-                                                          <div className="flex items-center space-x-2 mt-1">
-                                <Badge className={`text-xs ${getFrequencyColor(schedule.frequency)}`}>
-                                  {getPatternDetail(schedule)}
-                                </Badge>
-                                {schedule.start_time && (
-                                  <span className="text-xs text-gray-500">🕐 {formatTime(schedule.start_time)}</span>
-                                )}
-                                {schedule.end_time && (
-                                  <span className="text-xs text-gray-500">~ {formatTime(schedule.end_time)}</span>
-                                )}
-                                {/* 가족 구성원 배지들 */}
-                                <div className="flex space-x-1">
-                                  {schedule.family_members && Array.isArray(schedule.family_members) ? 
-                                    schedule.family_members.map(member => (
-                                      <Badge key={member} className={`text-xs ${FAMILY_MEMBER_COLORS[member]}`}>
-                                        {FAMILY_MEMBER_LABELS[member]}
-                                      </Badge>
-                                    ))
-                                    : 
-                                    <Badge className="text-xs bg-blue-100 text-blue-800">
-                                      가족
+                            <div className="flex items-center space-x-2 mt-1">
+                              <Badge className={`text-xs ${getFrequencyColor(schedule.frequency)}`}>
+                                {getPatternDetail(schedule)}
+                              </Badge>
+                              {schedule.start_time && (
+                                <span className="text-xs text-gray-500">🕐 {formatTime(schedule.start_time)}</span>
+                              )}
+                              {schedule.end_time && (
+                                <span className="text-xs text-gray-500">~ {formatTime(schedule.end_time)}</span>
+                              )}
+                              {/* 가족 구성원 배지들 */}
+                              <div className="flex space-x-1">
+                                {schedule.family_members && Array.isArray(schedule.family_members) ? 
+                                  schedule.family_members.map(member => (
+                                    <Badge key={member} className={`text-xs ${FAMILY_MEMBER_COLORS[member]}`}>
+                                      {FAMILY_MEMBER_LABELS[member]}
                                     </Badge>
-                                  }
-                                </div>
+                                  ))
+                                  : 
+                                  <Badge className="text-xs bg-blue-100 text-blue-800">
+                                    가족
+                                  </Badge>
+                                }
                               </div>
+                            </div>
                           </div>
                         </div>
                         <div className="flex space-x-1" onClick={(e) => e.stopPropagation()}>
@@ -2302,7 +2321,7 @@ export default function SchedulePage() {
             {getFilteredSchedules().map((schedule) => (
               <Card 
                 key={schedule.id} 
-                className="hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer border-2 border-transparent hover:border-blue-200"
+                className="hover:shadow-lg hover:scale-105 transition-all duration-200 cursor-pointer border-2 border-transparent hover:border-blue-200"
                 onClick={() => handleEdit(schedule)}
               >
                 <CardHeader>

@@ -126,8 +126,8 @@ export default function FamilyMealsPage() {
 
   // 주간 날짜들 가져오기
   const getWeekDays = () => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 }); // 월요일부터 시작
-    const end = endOfWeek(currentDate, { weekStartsOn: 1 });
+    const start = startOfWeek(currentDate, { weekStartsOn: 0 }); // 일요일부터 시작
+    const end = endOfWeek(currentDate, { weekStartsOn: 0 });
     return eachDayOfInterval({ start, end });
   };
 
@@ -409,7 +409,7 @@ export default function FamilyMealsPage() {
                 <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <h4 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
                     <ChefHat className="h-5 w-5 mr-2" />
-                    이번달 식단 목록
+                    이번달 식단
                   </h4>
                   <div className="space-y-3 max-h-60 overflow-y-auto">
                     {sortFamilyMeals(familyMeals).map((meal) => {
@@ -468,8 +468,8 @@ export default function FamilyMealsPage() {
                   </h2>
                   {(() => {
                     const today = new Date();
-                    const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
-                    const currentWeekEnd = endOfWeek(today, { weekStartsOn: 1 });
+                    const currentWeekStart = startOfWeek(today, { weekStartsOn: 0 });
+                    const currentWeekEnd = endOfWeek(today, { weekStartsOn: 0 });
                     const isCurrentWeek = currentDate >= currentWeekStart && currentDate <= currentWeekEnd;
                     return !isCurrentWeek ? (
                       <div className="relative group">
@@ -495,7 +495,7 @@ export default function FamilyMealsPage() {
               </div>
               
               <div className="grid grid-cols-7 gap-1 mb-6">
-                {['월', '화', '수', '목', '금', '토', '일'].map(day => (
+                {['일', '월', '화', '수', '목', '금', '토'].map(day => (
                   <div key={day} className="p-2 text-center font-medium text-gray-500 bg-gray-50">
                     {day}
                   </div>
@@ -567,51 +567,77 @@ export default function FamilyMealsPage() {
               
               {/* 이번주 식단 리스트 */}
               {(() => {
-                const weekMeals = familyMeals.filter(meal => {
-                  const mealDate = new Date(meal.date);
-                  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
-                  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
-                  return mealDate >= weekStart && mealDate <= weekEnd;
+                // 이번주의 모든 날짜를 일요일부터 토요일까지 생성
+                // 수동으로 일요일 계산 (0: 일요일, 1: 월요일, ..., 6: 토요일)
+                const currentDayOfWeek = currentDate.getDay(); // 0: 일요일, 1: 월요일, ...
+                const daysFromSunday = currentDayOfWeek; // 현재 날짜가 일요일로부터 며칠 떨어져 있는지
+                const weekStart = subDays(currentDate, daysFromSunday); // 일요일로 이동
+                
+                const weekDays = [];
+                for (let i = 0; i < 7; i++) {
+                  weekDays.push(addDays(weekStart, i));
+                }
+                
+                // 각 날짜에 해당하는 식단을 찾아서 순서대로 표시
+                const weekMealsWithDates = weekDays.map(date => {
+                  const dateKey = format(date, 'yyyy-MM-dd');
+                  const meal = familyMeals.find(fm => fm.date === dateKey);
+                  return {
+                    date: dateKey,
+                    displayDate: date,
+                    meal: meal
+                  };
                 });
                 
-                return weekMeals.length > 0 ? (
+                // 식단이 있는 날짜가 하나라도 있는지 확인
+                const hasMeals = weekMealsWithDates.some(item => item.meal);
+                
+                return hasMeals ? (
                   <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <h4 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
                       <ChefHat className="h-5 w-5 mr-2" />
-                      이번주 식단 목록
+                      이번주 식단
                     </h4>
                     <div className="space-y-3 max-h-60 overflow-y-auto">
-                      {sortFamilyMeals(weekMeals).map((meal) => {
-                        const isToday = format(new Date(meal.date), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                      {weekMealsWithDates.map((item) => {
+                        const isToday = format(item.displayDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
                         return (
-                          <div key={meal.id} className={`p-3 rounded-lg border ${
+                          <div key={item.date} className={`p-3 rounded-lg border ${
                             isToday ? 'bg-blue-50 border-blue-300' : 'bg-white border-green-200'
                           }`}>
                             <div className="flex items-center space-x-2 mb-2">
                               <Badge variant="outline" className={`text-xs font-medium ${
                                 isToday ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-white'
                               }`}>
-                                {format(new Date(meal.date), 'M월 d일 (E)', { locale: ko })}
+                                {format(item.displayDate, 'M월 d일 (E)', { locale: ko })}
                                 {isToday && ' - 오늘'}
                               </Badge>
                             </div>
                           <div className="space-y-2">
-                            {meal.breakfast && (
-                              <div className="flex items-center space-x-2">
-                                <Badge className="text-xs bg-blue-100 text-blue-800 w-12 text-center">아침</Badge>
-                                <span className="text-sm text-gray-700 break-words">{meal.breakfast}</span>
-                              </div>
-                            )}
-                            {meal.lunch && (
-                              <div className="flex items-center space-x-2">
-                                <Badge className="text-xs bg-green-100 text-green-800 w-12 text-center">점심</Badge>
-                                <span className="text-sm text-gray-700 break-words">{meal.lunch}</span>
-                              </div>
-                            )}
-                            {meal.dinner && (
-                              <div className="flex items-center space-x-2">
-                                <Badge className="text-xs bg-purple-100 text-purple-800 w-12 text-center">저녁</Badge>
-                                <span className="text-sm text-gray-700 break-words">{meal.dinner}</span>
+                            {item.meal ? (
+                              <>
+                                {item.meal.breakfast && (
+                                  <div className="flex items-center space-x-2">
+                                    <Badge className="text-xs bg-blue-100 text-blue-800 w-12 text-center">아침</Badge>
+                                    <span className="text-sm text-gray-700 break-words">{item.meal.breakfast}</span>
+                                  </div>
+                                )}
+                                {item.meal.lunch && (
+                                  <div className="flex items-center space-x-2">
+                                    <Badge className="text-xs bg-green-100 text-green-800 w-12 text-center">점심</Badge>
+                                    <span className="text-sm text-gray-700 break-words">{item.meal.lunch}</span>
+                                  </div>
+                                )}
+                                {item.meal.dinner && (
+                                  <div className="flex items-center space-x-2">
+                                    <Badge className="text-xs bg-purple-100 text-purple-800 w-12 text-center">저녁</Badge>
+                                    <span className="text-sm text-gray-700 break-words">{item.meal.dinner}</span>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="text-center py-2 text-gray-400 text-sm">
+                                등록된 식단이 없습니다
                               </div>
                             )}
                           </div>
@@ -767,41 +793,38 @@ export default function FamilyMealsPage() {
                 </div>
               </div>
               
-              {/* 오늘의 식단 상세 */}
+              {/* 오늘의 식단 */}
               {(() => {
                 const todayMeal = getMealForDate(currentDate);
                 return todayMeal && (todayMeal.breakfast || todayMeal.lunch || todayMeal.dinner) ? (
                   <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <h4 className="text-lg font-semibold text-green-900 mb-3 flex items-center">
                       <ChefHat className="h-5 w-5 mr-2" />
-                      오늘의 식단 상세
+                      오늘의 식단
                     </h4>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       {todayMeal.breakfast && (
                         <div className="p-4 bg-white rounded-lg border border-blue-200">
-                          <div className="flex items-center space-x-3 mb-2">
+                          <div className="flex items-center justify-center mb-2">
                             <Badge className="text-sm bg-blue-100 text-blue-800 px-3 py-1">🌅 아침</Badge>
-                            <span className="text-xs text-gray-500">오전 식사</span>
                           </div>
-                          <div className="text-lg font-medium text-gray-800 break-words">{todayMeal.breakfast}</div>
+                          <div className="text-lg font-medium text-gray-800 break-words text-center">{todayMeal.breakfast}</div>
                         </div>
                       )}
                       {todayMeal.lunch && (
                         <div className="p-4 bg-white rounded-lg border border-green-200">
-                          <div className="flex items-center space-x-3 mb-2">
+                          <div className="flex items-center justify-center mb-2">
                             <Badge className="text-sm bg-green-100 text-green-800 px-3 py-1">☀️ 점심</Badge>
-                            <span className="text-xs text-gray-500">오후 식사</span>
                           </div>
-                          <div className="text-lg font-medium text-gray-800 break-words">{todayMeal.lunch}</div>
+                          <div className="text-lg font-medium text-gray-800 break-words text-center">{todayMeal.lunch}</div>
                         </div>
                       )}
                       {todayMeal.dinner && (
                         <div className="p-4 bg-white rounded-lg border border-purple-200">
-                          <div className="flex items-center space-x-3 mb-2">
+                          <div className="flex items-center justify-center mb-2">
                             <Badge className="text-sm bg-purple-100 text-purple-800 px-3 py-1">🌙 저녁</Badge>
-                            <span className="text-xs text-gray-500">저녁 식사</span>
                           </div>
-                          <div className="text-lg font-medium text-gray-800 break-words">{todayMeal.dinner}</div>
+                          <div className="text-lg font-medium text-gray-800 break-words text-center">{todayMeal.dinner}</div>
                         </div>
                       )}
                     </div>
@@ -832,21 +855,55 @@ export default function FamilyMealsPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
+                <label className="text-sm font-medium text-gray-700 mb-3 block">
                   식사 시간
                 </label>
-                <Select value={selectedMealType} onValueChange={setSelectedMealType}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="식사 시간을 선택하세요" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {mealTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMealType('breakfast')}
+                    className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                      selectedMealType === 'breakfast'
+                        ? 'bg-blue-100 border-blue-300 shadow-md scale-105'
+                        : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">🌅</div>
+                      <div className="font-medium text-blue-800">아침</div>
+                    </div>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMealType('lunch')}
+                    className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                      selectedMealType === 'lunch'
+                        ? 'bg-green-100 border-green-300 shadow-md scale-105'
+                        : 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">☀️</div>
+                      <div className="font-medium text-green-800">점심</div>
+                    </div>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMealType('dinner')}
+                    className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                      selectedMealType === 'dinner'
+                        ? 'bg-purple-100 border-purple-300 shadow-md scale-105'
+                        : 'bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-2xl mb-2">🌙</div>
+                      <div className="font-medium text-purple-800">저녁</div>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               <div>

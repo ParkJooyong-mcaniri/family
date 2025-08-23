@@ -3,6 +3,7 @@
 import { Navigation } from "@/components/Navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Calendar, List, Clock, ChefHat } from "lucide-react";
 import { useState, useEffect } from "react";
 import { schedulesApi, familyMealsApi, mealsApi, recipesApi, Schedule } from "@/lib/supabase-client";
@@ -28,6 +29,13 @@ export default function Home() {
     start_time?: string;
     end_time?: string;
   }> }>({});
+  const [familyMeals, setFamilyMeals] = useState<{
+    id: string;
+    date: string;
+    breakfast?: string | null;
+    lunch?: string | null;
+    dinner?: string | null;
+  }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalSchedules: 0,
@@ -47,6 +55,16 @@ export default function Home() {
       try {
         // 기본 통계 데이터만 로드 (일정 관련)
         const schedulesData = await schedulesApi.getAll();
+        
+        // 가족식단 데이터 로드
+        try {
+          const familyMealsData = await familyMealsApi.getByMonth(new Date().getFullYear(), new Date().getMonth() + 1);
+          setFamilyMeals(familyMealsData || []);
+          console.log('가족식단 데이터 로드 완료:', familyMealsData);
+        } catch (familyMealsError) {
+          console.error('가족식단 데이터 로드 실패:', familyMealsError);
+          setFamilyMeals([]);
+        }
         
         // schedules 데이터는 사용하지 않으므로 주석 처리
         
@@ -292,7 +310,7 @@ export default function Home() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Link href="/schedule?member=family&view=day" className="block">
                   <div className="bg-orange-50 rounded-lg p-4 border border-orange-200 hover:bg-orange-100 transition-colors cursor-pointer">
-                    <div className="text-orange-600 font-semibold mb-2 text-center">👨‍👩‍👧‍👦 Family</div>
+                    <div className="text-orange-600 font-semibold mb-2 text-center">👨‍👩‍👧‍👦 가족</div>
                     <div className="mt-2 text-xs text-gray-500">
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
@@ -426,7 +444,7 @@ export default function Home() {
                 </Link>
                 <Link href="/schedule?member=seha&view=day" className="block">
                   <div className="bg-green-50 rounded-lg p-4 border border-green-200 hover:bg-green-100 transition-colors cursor-pointer">
-                    <div className="text-green-600 font-semibold mb-2 text-center">👧 세하</div>
+                    <div className="text-green-600 font-semibold mb-2 text-center">👦 세하</div>
                     <div className="mt-2 text-xs text-gray-500">
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
@@ -513,6 +531,74 @@ export default function Home() {
                   </div>
                 </Link>
               </div>
+                      </div>
+        </div>
+      </div>
+
+        {/* 오늘의 식단 상세 영역 */}
+        <div className="max-w-6xl mx-auto mb-12">
+          <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 border border-gray-100">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 text-center flex items-center justify-center">
+              <ChefHat className="mr-3 h-8 w-8 text-green-600" />
+              오늘의 식단
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* 아침 */}
+              <Link href="/family-meals" className="block">
+                <div className="bg-blue-50 rounded-xl p-6 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-center mb-4">
+                    <Badge className="text-sm bg-blue-100 text-blue-800 px-3 py-1">🌅 아침</Badge>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-medium text-gray-800">
+                      {(() => {
+                        const today = new Date();
+                        const todayKey = today.toISOString().split('T')[0];
+                        const todayMeal = familyMeals.find(fm => fm.date === todayKey);
+                        return todayMeal?.breakfast || '등록된 식단이 없습니다';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+
+              {/* 점심 */}
+              <Link href="/family-meals" className="block">
+                <div className="bg-green-50 rounded-xl p-6 border border-green-200 hover:bg-green-100 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-center mb-4">
+                    <Badge className="text-sm bg-green-100 text-green-800 px-3 py-1">☀️ 점심</Badge>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-medium text-gray-800">
+                      {(() => {
+                        const today = new Date();
+                        const todayKey = today.toISOString().split('T')[0];
+                        const todayMeal = familyMeals.find(fm => fm.date === todayKey);
+                        return todayMeal?.lunch || '등록된 식단이 없습니다';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+
+              {/* 저녁 */}
+              <Link href="/family-meals" className="block">
+                <div className="bg-purple-50 rounded-xl p-6 border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer">
+                  <div className="flex items-center justify-center mb-4">
+                    <Badge className="text-sm bg-purple-100 text-purple-800 px-3 py-1">🌙 저녁</Badge>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-medium text-gray-800">
+                      {(() => {
+                        const today = new Date();
+                        const todayKey = today.toISOString().split('T')[0];
+                        const todayMeal = familyMeals.find(fm => fm.date === todayKey);
+                        return todayMeal?.dinner || '등록된 식단이 없습니다';
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </Link>
             </div>
           </div>
         </div>

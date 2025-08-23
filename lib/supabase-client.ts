@@ -457,6 +457,8 @@ export const schedulesApi = {
         title: schedule.title || '',
         description: schedule.description || null,
         frequency: schedule.frequency || 'daily',
+        start_time: schedule.start_time || null,
+        end_time: schedule.end_time || null,
         start_date: schedule.start_date || new Date().toISOString().split('T')[0],
         end_date: schedule.end_date || null,
         weekly_day: schedule.weekly_day || null,
