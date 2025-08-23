@@ -461,7 +461,7 @@ export const schedulesApi = {
         end_time: schedule.end_time || null,
         start_date: schedule.start_date || new Date().toISOString().split('T')[0],
         end_date: schedule.end_date || null,
-        weekly_day: schedule.weekly_day || null,
+        weekly_day: schedule.weekly_day !== undefined ? schedule.weekly_day : null,
         monthly_day: schedule.monthly_day || null,
         custom_pattern: schedule.custom_pattern || null,
         family_members: schedule.family_members || [],
@@ -834,10 +834,7 @@ export const schedulesApi = {
                     // weekly_day가 1(월요일)~7(일요일)인 경우와 0(일요일)~6(토요일)인 경우 모두 처리
                     let scheduleDay = schedule.weekly_day;
                     
-                    // weekly_day가 1~7 범위인 경우 0~6으로 변환
-                    if (scheduleDay >= 1 && scheduleDay <= 7) {
-                      scheduleDay = scheduleDay === 7 ? 0 : scheduleDay; // 7(일요일)을 0으로 변환
-                    }
+                    // weekly_day는 이미 0~6 형식으로 저장되므로 변환 불필요
                     
                     shouldInclude = dayOfWeek === scheduleDay;
                   } else {

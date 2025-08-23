@@ -367,6 +367,7 @@ export default function SchedulePage() {
     try {
       console.log('=== 일정 저장 시작 ===');
       console.log('폼 데이터:', formData);
+      console.log('weekly_day 값:', formData.weekly_day, '타입:', typeof formData.weekly_day);
       
       const scheduleData = {
         title: formData.title,
@@ -376,13 +377,14 @@ export default function SchedulePage() {
         end_time: formData.end_time,
         start_date: formData.start_date,
         end_date: formData.end_date || undefined,
-        weekly_day: formData.weekly_day || undefined,
+        weekly_day: formData.weekly_day !== undefined ? formData.weekly_day : undefined,
         monthly_day: formData.monthly_day || undefined,
         custom_pattern: formData.custom_pattern || undefined,
         family_members: formData.family_members,
       };
       
       console.log('저장할 데이터:', scheduleData);
+      console.log('weekly_day 최종값:', scheduleData.weekly_day);
 
       if (editingSchedule) {
         console.log('기존 일정 수정:', editingSchedule.id);
@@ -424,6 +426,10 @@ export default function SchedulePage() {
   };
 
   const handleEdit = (schedule: Schedule) => {
+    console.log('=== 일정 수정 시작 ===');
+    console.log('수정할 일정:', schedule);
+    console.log('weekly_day 값:', schedule.weekly_day, '타입:', typeof schedule.weekly_day);
+    
     setEditingSchedule(schedule);
     setFormData({
       title: schedule.title,
@@ -433,11 +439,17 @@ export default function SchedulePage() {
       end_time: schedule.end_time || format(new Date(new Date().getTime() + 60 * 60 * 1000), 'HH:mm'),
       start_date: schedule.start_date,
       end_date: schedule.end_date || "",
-      weekly_day: schedule.weekly_day || undefined,
-      monthly_day: schedule.monthly_day || undefined,
+      weekly_day: schedule.weekly_day !== null && schedule.weekly_day !== undefined ? schedule.weekly_day : undefined,
+      monthly_day: schedule.monthly_day !== null && schedule.monthly_day !== undefined ? schedule.monthly_day : undefined,
       custom_pattern: schedule.custom_pattern || "",
       family_members: schedule.family_members || ['family'],
     });
+    
+    console.log('설정된 formData:', {
+      frequency: schedule.frequency,
+      weekly_day: schedule.weekly_day !== null && schedule.weekly_day !== undefined ? schedule.weekly_day : undefined
+    });
+    
     setSelectedFamilyMembers(schedule.family_members || ['family']);
     setIsDialogOpen(true);
   };
@@ -611,14 +623,18 @@ export default function SchedulePage() {
           break;
         case 'weekly':
           if (schedule.weekly_day !== null && schedule.weekly_day !== undefined) {
-            // weekly_day가 1(월요일)~7(일요일)인 경우와 0(일요일)~6(토요일)인 경우 모두 처리
+            // weekly_day는 0(일요일)~6(토요일) 형식으로 저장됨
             const currentDay = date.getDay(); // 0(일요일) ~ 6(토요일)
             let scheduleDay = schedule.weekly_day;
             
-            // weekly_day가 1~7 범위인 경우 0~6으로 변환
-            if (scheduleDay >= 1 && scheduleDay <= 7) {
-              scheduleDay = scheduleDay === 7 ? 0 : scheduleDay; // 7(일요일)을 0으로 변환
-            }
+            console.log('주간 패턴 계산:', {
+              scheduleTitle: schedule.title,
+              scheduleWeeklyDay: schedule.weekly_day,
+              currentDate: date.toISOString().split('T')[0],
+              currentDay: currentDay,
+              scheduleDay: scheduleDay,
+              shouldInclude: currentDay === scheduleDay
+            });
             
             shouldInclude = currentDay === scheduleDay;
           } else {
