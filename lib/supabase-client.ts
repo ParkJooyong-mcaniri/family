@@ -879,16 +879,16 @@ export const schedulesApi = {
                         startDate: schedule.start_date
                       });
                       
-                      // 패턴에 따른 처리
+                      // 패턴에 따른 처리 - 일정관리와 동일한 로직
                       if (pattern.type === 'interval') {
-                        // 간격 기반 (예: 3일마다)
+                        // 간격 기반 (예: 3일마다) - 일정관리와 동일한 로직
                         const startDate = new Date(schedule.start_date);
                         const todayDate = new Date(today);
                         const daysDiff = Math.floor((todayDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
                         shouldInclude = daysDiff >= 0 && daysDiff % pattern.interval === 0;
                         console.log(`${member} "${schedule.title}" interval 패턴 결과:`, { daysDiff, interval: pattern.interval, shouldInclude });
                       } else if (pattern.type === 'specific_days') {
-                        // 특정 요일들 (예: 월,수,금)
+                        // 특정 요일들 (예: 월,수,금) - 일정관리와 동일한 로직
                         const hasDays = pattern.days && Array.isArray(pattern.days);
                         const includesToday = hasDays && pattern.days.includes(dayOfWeek);
                         shouldInclude = includesToday;
@@ -902,11 +902,11 @@ export const schedulesApi = {
                           calculation: `${dayOfWeek} ∉ [${pattern.days?.join(', ')}] = ${!includesToday}`
                         });
                       } else if (pattern.type === 'weekday') {
-                        // 평일만 (월~금)
+                        // 평일만 (월~금) - 일정관리와 동일한 로직
                         shouldInclude = dayOfWeek >= 1 && dayOfWeek <= 5;
                         console.log(`${member} "${schedule.title}" weekday 패턴 결과:`, { todayDay: dayOfWeek, shouldInclude });
                       } else if (pattern.type === 'weekend') {
-                        // 주말만 (토,일)
+                        // 주말만 (토,일) - 일정관리와 동일한 로직
                         shouldInclude = dayOfWeek === 0 || dayOfWeek === 6;
                         console.log(`${member} "${schedule.title}" weekend 패턴 결과:`, { todayDay: dayOfWeek, shouldInclude });
                       } else {

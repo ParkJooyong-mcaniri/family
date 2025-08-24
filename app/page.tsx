@@ -29,6 +29,16 @@ export default function Home() {
     start_time?: string;
     end_time?: string;
   }> }>({});
+  
+  // 각 구성원별 "더보기" 상태 관리
+  const [expandedMembers, setExpandedMembers] = useState<{ [key: string]: boolean }>({
+    family: false,
+    mom: false,
+    dad: false,
+    sein: false,
+    seha: false
+  });
+  
   const [familyMeals, setFamilyMeals] = useState<{
     id: string;
     date: string;
@@ -46,6 +56,14 @@ export default function Home() {
     todayUncompleted: 0,
     tomorrowUncompleted: 0,
   });
+
+  // "더보기" 토글 함수
+  const toggleExpanded = (member: string) => {
+    setExpandedMembers(prev => ({
+      ...prev,
+      [member]: !prev[member]
+    }));
+  };
 
   // 데이터 로드
   useEffect(() => {
@@ -307,6 +325,9 @@ export default function Home() {
               <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 text-center">
                 의미있는 하루
               </h2>
+              
+
+              
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Link href="/schedule?member=family&view=day" className="block">
                   <div className="bg-orange-50 rounded-lg p-4 border border-orange-200 hover:bg-orange-100 transition-colors cursor-pointer">
@@ -315,39 +336,86 @@ export default function Home() {
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
                       ) : memberSchedules['family'] && memberSchedules['family'].length > 0 ? (
-                        memberSchedules['family'].slice(0, 3).map((schedule, index) => {
-                          console.log(`Family 일정 ${index} 상세:`, {
-                            title: schedule.title,
-                            completed: schedule.completed,
-                            family_members: schedule.family_members,
-                            frequency: schedule.frequency,
-                            start_date: schedule.start_date,
-                            end_date: schedule.end_date
-                          });
-                          return (
-                            <div key={index} className="mb-2">
-                              <div className="flex items-center space-x-2">
-                                {schedule.completed ? (
-                                  <>
-                                    <span className="text-green-500">✅</span>
-                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="text-blue-400">🚀</span>
-                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
-                                  </>
+                        <>
+                          {/* 처음 3개 일정 표시 */}
+                          {memberSchedules['family'].slice(0, 3).map((schedule, index) => {
+                            console.log(`Family 일정 ${index} 상세:`, {
+                              title: schedule.title,
+                              completed: schedule.completed,
+                              family_members: schedule.family_members,
+                              frequency: schedule.frequency,
+                              start_date: schedule.start_date,
+                              end_date: schedule.end_date
+                            });
+                            return (
+                              <div key={index} className="mb-2">
+                                <div className="flex items-center space-x-2">
+                                  {schedule.completed ? (
+                                    <>
+                                      <span className="text-green-500">✅</span>
+                                      <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-blue-400">🚀</span>
+                                      <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {schedule.start_time && (
+                                  <div className="text-xs text-gray-400 ml-6 mt-1">
+                                    🕐 {formatTime(schedule.start_time)}
+                                    {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                  </div>
                                 )}
                               </div>
-                              {schedule.start_time && (
-                                <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime(schedule.start_time)}
-                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                          
+                          {/* 3개 초과 시 "더보기" 버튼 또는 추가 일정 표시 */}
+                          {memberSchedules['family'].length > 3 && (
+                            <>
+                              {expandedMembers['family'] ? (
+                                // 확장된 상태: 나머지 일정 모두 표시
+                                memberSchedules['family'].slice(3).map((schedule, index) => (
+                                  <div key={`expanded-${index}`} className="mb-2">
+                                    <div className="flex items-center space-x-2">
+                                      {schedule.completed ? (
+                                        <>
+                                          <span className="text-green-500">✅</span>
+                                          <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-blue-400">🚀</span>
+                                          <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {schedule.start_time && (
+                                      <div className="text-xs text-gray-400 ml-6 mt-1">
+                                        🕐 {formatTime(schedule.start_time)}
+                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : null}
+                              
+                              {/* 더보기/접기 버튼 */}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleExpanded('family');
+                                }}
+                                className="w-full mt-2 py-1 px-2 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded transition-colors"
+                              >
+                                {expandedMembers['family'] ? '접기' : `더보기 (${memberSchedules['family'].length - 3}개)`}
+                              </button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <div className="text-gray-400">오늘 할일이 없습니다</div>
                       )}
@@ -361,37 +429,84 @@ export default function Home() {
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
                       ) : memberSchedules['mom'] && memberSchedules['mom'].length > 0 ? (
-                        memberSchedules['mom'].slice(0, 3).map((schedule, index) => {
-                          console.log(`Mom 일정 ${index} 상세:`, {
-                            title: schedule.title,
-                            completed: schedule.completed,
-                            family_members: schedule.family_members,
-                            frequency: schedule.frequency
-                          });
-                          return (
-                            <div key={index} className="mb-2">
-                              <div className="flex items-center space-x-2">
-                                {schedule.completed ? (
-                                  <>
-                                    <span className="text-green-500">✅</span>
-                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="text-blue-400">🚀</span>
-                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
-                                  </>
+                        <>
+                          {/* 처음 3개 일정 표시 */}
+                          {memberSchedules['mom'].slice(0, 3).map((schedule, index) => {
+                            console.log(`Mom 일정 ${index} 상세:`, {
+                              title: schedule.title,
+                              completed: schedule.completed,
+                              family_members: schedule.family_members,
+                              frequency: schedule.frequency
+                            });
+                            return (
+                              <div key={index} className="mb-2">
+                                <div className="flex items-center space-x-2">
+                                  {schedule.completed ? (
+                                    <>
+                                      <span className="text-green-500">✅</span>
+                                      <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-blue-400">🚀</span>
+                                      <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {schedule.start_time && (
+                                  <div className="text-xs text-gray-400 ml-6 mt-1">
+                                    🕐 {formatTime(schedule.start_time)}
+                                    {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                  </div>
                                 )}
                               </div>
-                              {schedule.start_time && (
-                                <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime(schedule.start_time)}
-                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                          
+                          {/* 3개 초과 시 "더보기" 버튼 또는 추가 일정 표시 */}
+                          {memberSchedules['mom'].length > 3 && (
+                            <>
+                              {expandedMembers['mom'] ? (
+                                // 확장된 상태: 나머지 일정 모두 표시
+                                memberSchedules['mom'].slice(3).map((schedule, index) => (
+                                  <div key={`expanded-${index}`} className="mb-2">
+                                    <div className="flex items-center space-x-2">
+                                      {schedule.completed ? (
+                                        <>
+                                          <span className="text-green-500">✅</span>
+                                          <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-blue-400">🚀</span>
+                                          <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {schedule.start_time && (
+                                      <div className="text-xs text-gray-400 ml-6 mt-1">
+                                        🕐 {formatTime(schedule.start_time)}
+                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : null}
+                              
+                              {/* 더보기/접기 버튼 */}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleExpanded('mom');
+                                }}
+                                className="w-full mt-2 py-1 px-2 text-xs bg-pink-100 hover:bg-pink-200 text-pink-700 rounded transition-colors"
+                              >
+                                {expandedMembers['mom'] ? '접기' : `더보기 (${memberSchedules['mom'].length - 3}개)`}
+                              </button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <div className="text-gray-400">오늘 할일이 없습니다</div>
                       )}
@@ -405,37 +520,84 @@ export default function Home() {
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
                       ) : memberSchedules['sein'] && memberSchedules['sein'].length > 0 ? (
-                        memberSchedules['sein'].slice(0, 3).map((schedule, index) => {
-                          console.log(`Sein 일정 ${index} 상세:`, {
-                            title: schedule.title,
-                            completed: schedule.completed,
-                            family_members: schedule.family_members,
-                            frequency: schedule.frequency
-                          });
-                          return (
-                            <div key={index} className="mb-2">
-                              <div className="flex items-center space-x-2">
-                                {schedule.completed ? (
-                                  <>
-                                    <span className="text-green-500">✅</span>
-                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="text-blue-400">🚀</span>
-                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
-                                  </>
+                        <>
+                          {/* 처음 3개 일정 표시 */}
+                          {memberSchedules['sein'].slice(0, 3).map((schedule, index) => {
+                            console.log(`Sein 일정 ${index} 상세:`, {
+                              title: schedule.title,
+                              completed: schedule.completed,
+                              family_members: schedule.family_members,
+                              frequency: schedule.frequency
+                            });
+                            return (
+                              <div key={index} className="mb-2">
+                                <div className="flex items-center space-x-2">
+                                  {schedule.completed ? (
+                                    <>
+                                      <span className="text-green-500">✅</span>
+                                      <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-blue-400">🚀</span>
+                                      <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {schedule.start_time && (
+                                  <div className="text-xs text-gray-400 ml-6 mt-1">
+                                    🕐 {formatTime(schedule.start_time)}
+                                    {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                  </div>
                                 )}
                               </div>
-                              {schedule.start_time && (
-                                <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime(schedule.start_time)}
-                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                          
+                          {/* 3개 초과 시 "더보기" 버튼 또는 추가 일정 표시 */}
+                          {memberSchedules['sein'].length > 3 && (
+                            <>
+                              {expandedMembers['sein'] ? (
+                                // 확장된 상태: 나머지 일정 모두 표시
+                                memberSchedules['sein'].slice(3).map((schedule, index) => (
+                                  <div key={`expanded-${index}`} className="mb-2">
+                                    <div className="flex items-center space-x-2">
+                                      {schedule.completed ? (
+                                        <>
+                                          <span className="text-green-500">✅</span>
+                                          <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-blue-400">🚀</span>
+                                          <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {schedule.start_time && (
+                                      <div className="text-xs text-gray-400 ml-6 mt-1">
+                                        🕐 {formatTime(schedule.start_time)}
+                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : null}
+                              
+                              {/* 더보기/접기 버튼 */}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleExpanded('sein');
+                                }}
+                                className="w-full mt-2 py-1 px-2 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded transition-colors"
+                              >
+                                {expandedMembers['sein'] ? '접기' : `더보기 (${memberSchedules['sein'].length - 3}개)`}
+                              </button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <div className="text-gray-400">오늘 할일이 없습니다</div>
                       )}
@@ -449,37 +611,84 @@ export default function Home() {
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
                       ) : memberSchedules['seha'] && memberSchedules['seha'].length > 0 ? (
-                        memberSchedules['seha'].slice(0, 3).map((schedule, index) => {
-                          console.log(`Seha 일정 ${index} 상세:`, {
-                            title: schedule.title,
-                            completed: schedule.completed,
-                            family_members: schedule.family_members,
-                            frequency: schedule.frequency
-                          });
-                          return (
-                            <div key={index} className="mb-2">
-                              <div className="flex items-center space-x-2">
-                                {schedule.completed ? (
-                                  <>
-                                    <span className="text-green-500">✅</span>
-                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="text-blue-400">🚀</span>
-                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
-                                  </>
+                        <>
+                          {/* 처음 3개 일정 표시 */}
+                          {memberSchedules['seha'].slice(0, 3).map((schedule, index) => {
+                            console.log(`Seha 일정 ${index} 상세:`, {
+                              title: schedule.title,
+                              completed: schedule.completed,
+                              family_members: schedule.family_members,
+                              frequency: schedule.frequency
+                            });
+                            return (
+                              <div key={index} className="mb-2">
+                                <div className="flex items-center space-x-2">
+                                  {schedule.completed ? (
+                                    <>
+                                      <span className="text-green-500">✅</span>
+                                      <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-blue-400">🚀</span>
+                                      <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {schedule.start_time && (
+                                  <div className="text-xs text-gray-400 ml-6 mt-1">
+                                    🕐 {formatTime(schedule.start_time)}
+                                    {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                  </div>
                                 )}
                               </div>
-                              {schedule.start_time && (
-                                <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime(schedule.start_time)}
-                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                          
+                          {/* 3개 초과 시 "더보기" 버튼 또는 추가 일정 표시 */}
+                          {memberSchedules['seha'].length > 3 && (
+                            <>
+                              {expandedMembers['seha'] ? (
+                                // 확장된 상태: 나머지 일정 모두 표시
+                                memberSchedules['seha'].slice(3).map((schedule, index) => (
+                                  <div key={`expanded-${index}`} className="mb-2">
+                                    <div className="flex items-center space-x-2">
+                                      {schedule.completed ? (
+                                        <>
+                                          <span className="text-green-500">✅</span>
+                                          <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-blue-400">🚀</span>
+                                          <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {schedule.start_time && (
+                                      <div className="text-xs text-gray-400 ml-6 mt-1">
+                                        🕐 {formatTime(schedule.start_time)}
+                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : null}
+                              
+                              {/* 더보기/접기 버튼 */}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleExpanded('seha');
+                                }}
+                                className="w-full mt-2 py-1 px-2 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded transition-colors"
+                              >
+                                {expandedMembers['seha'] ? '접기' : `더보기 (${memberSchedules['seha'].length - 3}개)`}
+                              </button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <div className="text-gray-400">오늘 할일이 없습니다</div>
                       )}
@@ -493,37 +702,84 @@ export default function Home() {
                       {isLoading ? (
                         <div className="text-gray-400">로딩 중...</div>
                       ) : memberSchedules['dad'] && memberSchedules['dad'].length > 0 ? (
-                        memberSchedules['dad'].slice(0, 3).map((schedule, index) => {
-                          console.log(`Dad 일정 ${index} 상세:`, {
-                            title: schedule.title,
-                            completed: schedule.completed,
-                            family_members: schedule.family_members,
-                            frequency: schedule.frequency
-                          });
-                          return (
-                            <div key={index} className="mb-2">
-                              <div className="flex items-center space-x-2">
-                                {schedule.completed ? (
-                                  <>
-                                    <span className="text-green-500">✅</span>
-                                    <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <span className="text-blue-400">🚀</span>
-                                    <span className="text-gray-600 text-xs">{schedule.title}</span>
-                                  </>
+                        <>
+                          {/* 처음 3개 일정 표시 */}
+                          {memberSchedules['dad'].slice(0, 3).map((schedule, index) => {
+                            console.log(`Dad 일정 ${index} 상세:`, {
+                              title: schedule.title,
+                              completed: schedule.completed,
+                              family_members: schedule.family_members,
+                              frequency: schedule.frequency
+                            });
+                            return (
+                              <div key={index} className="mb-2">
+                                <div className="flex items-center space-x-2">
+                                  {schedule.completed ? (
+                                    <>
+                                      <span className="text-green-500">✅</span>
+                                      <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-blue-400">🚀</span>
+                                      <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {schedule.start_time && (
+                                  <div className="text-xs text-gray-400 ml-6 mt-1">
+                                    🕐 {formatTime(schedule.start_time)}
+                                    {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                  </div>
                                 )}
                               </div>
-                              {schedule.start_time && (
-                                <div className="text-xs text-gray-400 ml-6 mt-1">
-                                  🕐 {formatTime(schedule.start_time)}
-                                  {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
+                            );
+                          })}
+                          
+                          {/* 3개 초과 시 "더보기" 버튼 또는 추가 일정 표시 */}
+                          {memberSchedules['dad'].length > 3 && (
+                            <>
+                              {expandedMembers['dad'] ? (
+                                // 확장된 상태: 나머지 일정 모두 표시
+                                memberSchedules['dad'].slice(3).map((schedule, index) => (
+                                  <div key={`expanded-${index}`} className="mb-2">
+                                    <div className="flex items-center space-x-2">
+                                      {schedule.completed ? (
+                                        <>
+                                          <span className="text-green-500">✅</span>
+                                          <span className="line-through text-gray-400 text-xs">{schedule.title}</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span className="text-blue-400">🚀</span>
+                                          <span className="text-gray-600 text-xs">{schedule.title}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    {schedule.start_time && (
+                                      <div className="text-xs text-gray-400 ml-6 mt-1">
+                                        🕐 {formatTime(schedule.start_time)}
+                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : null}
+                              
+                              {/* 더보기/접기 버튼 */}
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleExpanded('dad');
+                                }}
+                                className="w-full mt-2 py-1 px-2 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded transition-colors"
+                              >
+                                {expandedMembers['dad'] ? '접기' : `더보기 (${memberSchedules['dad'].length - 3}개)`}
+                              </button>
+                            </>
+                          )}
+                        </>
                       ) : (
                         <div className="text-gray-400">오늘 할일이 없습니다</div>
                       )}
