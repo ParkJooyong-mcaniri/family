@@ -23,6 +23,8 @@ export default function FamilyMealsPage() {
   const [familyMeals, setFamilyMeals] = useState<FamilyMeal[]>([]);
   const [availableMeals, setAvailableMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
 
   const mealTypes = [
     { value: "breakfast", label: "아침" },
@@ -59,6 +61,19 @@ export default function FamilyMealsPage() {
     }
   }, []);
 
+  // 외부 클릭 시 자동완성 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.autocomplete-container')) {
+        setShowAutocomplete(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -75,6 +90,11 @@ export default function FamilyMealsPage() {
     }
   };
 
+  // 자동완성용 필터링 (현재 입력된 텍스트와 일치하는 메뉴들)
+  const filteredAutocomplete = mealName.length >= 1 ? availableMeals.filter(meal =>
+    meal.meal_name.toLowerCase().includes(mealName.toLowerCase())
+  ).slice(0, 8) : []; // 최대 8개까지만 표시, 1글자 이상 입력 시에만 표시
+
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
     if (date) {
@@ -89,6 +109,28 @@ export default function FamilyMealsPage() {
       const dateKey = format(selectedDate, "yyyy-MM-dd");
       const existingMeal = familyMeals.find(fm => fm.date === dateKey);
       
+      // 신규 메뉴인지 확인 (기존 등록된 메뉴에 없는 경우)
+      const isNewMeal = !availableMeals.some(meal => 
+        meal.meal_name.toLowerCase() === mealName.trim().toLowerCase()
+      );
+
+      // 신규 메뉴인 경우 식단리스트에 자동 추가
+      if (isNewMeal) {
+        try {
+          const newMealData = {
+            meal_name: mealName.trim(),
+            family_preference: "Not Yet" as const, // 기본값
+            status: true, // 캘린더 노출 기본값
+          };
+          
+          await mealsApi.create(newMealData);
+          console.log('신규 메뉴가 식단리스트에 자동 추가되었습니다:', mealName.trim());
+        } catch (mealCreateError) {
+          console.warn('신규 메뉴 자동 추가 실패:', mealCreateError);
+          // 신규 메뉴 추가 실패해도 가족 식단 저장은 계속 진행
+        }
+      }
+      
       const mealData = {
         date: dateKey,
         breakfast: selectedMealType === 'breakfast' ? mealName.trim() : existingMeal?.breakfast || null,
@@ -97,7 +139,7 @@ export default function FamilyMealsPage() {
       };
 
       await familyMealsApi.upsert(mealData);
-      await loadData();
+      await loadData(); // 데이터 다시 로드하여 신규 메뉴도 포함
 
       // Reset form
       setSelectedMealType("");
@@ -113,10 +155,60 @@ export default function FamilyMealsPage() {
     setSelectedMealType("");
     setMealName("");
     setIsDialogOpen(false);
+    setShowAutocomplete(false);
+    setSelectedAutocompleteIndex(0);
   };
 
   const handleMealSelect = (mealName: string) => {
     setMealName(mealName);
+  };
+
+  // 자동완성 관련 핸들러들
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setMealName(value);
+    
+    // 1글자 이상 입력 시에만 자동완성 표시
+    if (value.length >= 1) {
+      setShowAutocomplete(true);
+      setSelectedAutocompleteIndex(0);
+    } else {
+      setShowAutocomplete(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showAutocomplete || filteredAutocomplete.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedAutocompleteIndex(prev => 
+          prev < filteredAutocomplete.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedAutocompleteIndex(prev => 
+          prev > 0 ? prev - 1 : filteredAutocomplete.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (filteredAutocomplete[selectedAutocompleteIndex]) {
+          setMealName(filteredAutocomplete[selectedAutocompleteIndex].meal_name);
+          setShowAutocomplete(false);
+        }
+        break;
+      case 'Escape':
+        setShowAutocomplete(false);
+        break;
+    }
+  };
+
+  const handleAutocompleteSelect = (mealName: string) => {
+    setMealName(mealName);
+    setShowAutocomplete(false);
   };
 
   const getMealForDate = (date: Date) => {
@@ -911,11 +1003,49 @@ export default function FamilyMealsPage() {
                   메뉴
                 </label>
                 <div className="space-y-2">
-                  <Input
-                    placeholder="메뉴를 입력하거나 아래에서 선택하세요"
-                    value={mealName}
-                    onChange={(e) => setMealName(e.target.value)}
-                  />
+                  <div className="relative autocomplete-container">
+                    <Input
+                      placeholder="메뉴를 입력하거나 아래에서 선택하세요"
+                      value={mealName}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      onFocus={() => setShowAutocomplete(true)}
+                      className="pr-10"
+                    />
+                    {mealName && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setMealName("")}
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-gray-100"
+                      >
+                        ×
+                      </Button>
+                    )}
+                    
+                    {/* 자동완성 드롭다운 */}
+                    {showAutocomplete && mealName.length >= 1 && filteredAutocomplete.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                        {filteredAutocomplete.map((meal, index) => (
+                          <button
+                            key={meal.id}
+                            type="button"
+                            onClick={() => handleAutocompleteSelect(meal.meal_name)}
+                            className={`w-full text-left px-3 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                              index === selectedAutocompleteIndex ? 'bg-gray-100' : ''
+                            }`}
+                            onMouseEnter={() => setSelectedAutocompleteIndex(index)}
+                          >
+                            <div className="font-medium text-gray-900">{meal.meal_name}</div>
+                            <div className="text-xs text-gray-500">
+                              호응도: {meal.family_preference}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div className="text-xs text-gray-500 mb-2">기존 메뉴에서 선택:</div>
                   <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                     {availableMeals.map((meal) => (

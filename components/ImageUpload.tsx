@@ -552,7 +552,7 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
                     </div>
                   </div>
                   
-                  
+                    
                 </div>
               )}
             </div>
