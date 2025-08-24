@@ -752,6 +752,12 @@ export default function SchedulePage() {
     }
   };
 
+  // 모바일용 주간 라벨 (개행 포함)
+  const getWeeklyDayLabelMobile = (day: number) => {
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+    return days[day] || '알 수 없음';
+  };
+
   // 패턴 상세 정보 생성
   const getPatternDetail = (schedule: Schedule) => {
     if (schedule.frequency === 'custom' && schedule.custom_pattern) {
@@ -1971,7 +1977,9 @@ export default function SchedulePage() {
                                   >
                                     <div className="flex items-center space-x-1 min-w-0 flex-1">
                                       <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                                        {getFrequencyShortLabel(schedule.frequency)}
+                                        <div className="text-center">
+                                          <div className="font-bold text-xs">{getFrequencyShortLabel(schedule.frequency)}</div>
+                                        </div>
                                       </Badge>
                                       <div className="min-w-0 flex-1">
                                         <div className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
@@ -2080,7 +2088,9 @@ export default function SchedulePage() {
                               >
                                 <div className="flex items-center space-x-1 min-w-0 flex-1">
                                   <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                                    {getFrequencyShortLabel(schedule.frequency)}
+                                    <div className="text-center">
+                                      <div className="font-bold text-xs">{getFrequencyShortLabel(schedule.frequency)}</div>
+                                    </div>
                                   </Badge>
                                   <div className="min-w-0 flex-1">
                                     <div className={`truncate text-sm ${isCompleted ? 'line-through text-gray-500' : 'text-gray-800'}`}>
@@ -2137,13 +2147,15 @@ export default function SchedulePage() {
                       >
                         <div className="flex items-center space-x-3 min-w-0 flex-1">
                           <Badge className={`flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
-                            {getFrequencyShortLabel(schedule.frequency)}
-                            {schedule.frequency === 'weekly' && schedule.weekly_day !== null && schedule.weekly_day !== undefined && 
-                              ` ${getWeeklyDayLabel(schedule.weekly_day)}`
-                            }
-                            {schedule.frequency === 'monthly' && schedule.monthly_day !== null && schedule.monthly_day !== undefined && 
-                              ` ${getMonthlyDayLabel(schedule.monthly_day)}`
-                            }
+                            <div className="text-center">
+                              <div className="font-bold">{getFrequencyShortLabel(schedule.frequency)}</div>
+                              {schedule.frequency === 'weekly' && schedule.weekly_day !== null && schedule.weekly_day !== undefined && (
+                                <div className="text-xs leading-tight">{getWeeklyDayLabelMobile(schedule.weekly_day)}</div>
+                              )}
+                              {schedule.frequency === 'monthly' && schedule.monthly_day !== null && schedule.monthly_day !== undefined && (
+                                <div className="text-xs leading-tight">{getMonthlyDayLabel(schedule.monthly_day)}</div>
+                              )}
+                            </div>
                           </Badge>
                           <div className="min-w-0 flex-1">
                             <h4 className={`font-medium truncate ${isCompleted ? 'line-through text-gray-500' : ''}`}>
@@ -2172,9 +2184,9 @@ export default function SchedulePage() {
                               className="h-4 w-4 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
                               title={isCompleted ? '완료됨 - 클릭하여 미완료로 변경' : '미완료 - 클릭하여 완료로 변경'}
                             />
-                            <span className="text-sm text-gray-600">
-                              {isCompleted ? '완료' : '미완료'}
-                            </span>
+                            {isCompleted ? null : (
+                              <span className="text-lg" title="미완료">🚀</span>
+                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -2371,19 +2383,35 @@ export default function SchedulePage() {
                   )}
                 </CardHeader>
                 <CardContent>
-                  <div className="text-sm text-gray-600 space-y-2">
-                    <div className="flex items-center space-x-4">
-                      <p>시작일: {format(new Date(schedule.start_date), 'yyyy년 M월 d일')}</p>
-                      {schedule.start_time && (
-                        <p>시작시간: {formatTime(schedule.start_time)}</p>
-                      )}
-                      {schedule.end_time && (
-                        <p>종료시간: {formatTime(schedule.end_time)}</p>
-                      )}
-                      {schedule.end_date && (
-                        <p>종료일: {format(new Date(schedule.end_date), 'yyyy년 M월 d일')}</p>
-                      )}
+                  <div className="text-sm text-gray-600 space-y-3">
+                    {/* 날짜 정보 */}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-blue-500">📅</span>
+                      <span className="font-medium">
+                        {format(new Date(schedule.start_date), 'yyyy년 M월 d일')}
+                        {schedule.end_date && schedule.end_date !== schedule.start_date && (
+                          <span className="text-gray-500"> ~ {format(new Date(schedule.end_date), 'yyyy년 M월 d일')}</span>
+                        )}
+                      </span>
                     </div>
+                    
+                    {/* 시간 정보 */}
+                    {(schedule.start_time || schedule.end_time) && (
+                      <div className="flex items-center space-x-2">
+                        <span className="text-green-500">🕐</span>
+                        <span className="font-medium">
+                          {schedule.start_time && (
+                            <span>{formatTime(schedule.start_time)}</span>
+                          )}
+                          {schedule.start_time && schedule.end_time && (
+                            <span className="text-gray-500"> ~ {formatTime(schedule.end_time)}</span>
+                          )}
+                          {!schedule.start_time && schedule.end_time && (
+                            <span className="text-gray-500">~ {formatTime(schedule.end_time)}</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
                     
                     {/* 패턴 상세 정보 */}
                     {schedule.frequency === 'custom' && schedule.custom_pattern && (
