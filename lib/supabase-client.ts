@@ -116,7 +116,7 @@ export const FAMILY_MEMBER_LABELS: Record<FamilyMember, string> = {
 export const FAMILY_MEMBER_COLORS: Record<FamilyMember, string> = {
   [FAMILY_MEMBERS.FAMILY]: 'bg-blue-100 text-blue-800',
   [FAMILY_MEMBERS.MOM]: 'bg-pink-100 text-pink-800',
-  [FAMILY_MEMBERS.DAD]: 'bg-blue-100 text-blue-800',
+  [FAMILY_MEMBERS.DAD]: 'bg-violet-100 text-violet-800',
   [FAMILY_MEMBERS.SEIN]: 'bg-green-100 text-green-800',
   [FAMILY_MEMBERS.SEHA]: 'bg-purple-100 text-purple-800'
 };

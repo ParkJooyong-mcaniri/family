@@ -703,7 +703,29 @@ export default function SchedulePage() {
       return shouldInclude;
     });
     
-    return filteredSchedules;
+    // 구성원별로 그룹화하고 시작시간 순서로 정렬
+    const groupedAndSortedSchedules = filteredSchedules.sort((a, b) => {
+      // 1. 먼저 구성원 순서로 정렬 (가족 > 엄마 > 아빠 > 세인 > 세하)
+      const memberOrder = { 'family': 0, 'mom': 1, 'dad': 2, 'sein': 3, 'seha': 4 };
+      
+      const aFirstMember = a.family_members && a.family_members.length > 0 ? a.family_members[0] : 'family';
+      const bFirstMember = b.family_members && b.family_members.length > 0 ? b.family_members[0] : 'family';
+      
+      const aMemberOrder = memberOrder[aFirstMember as keyof typeof memberOrder] ?? 5;
+      const bMemberOrder = memberOrder[bFirstMember as keyof typeof memberOrder] ?? 5;
+      
+      if (aMemberOrder !== bMemberOrder) {
+        return aMemberOrder - bMemberOrder;
+      }
+      
+      // 2. 같은 구성원 내에서는 시작시간 순서로 정렬
+      const aStartTime = a.start_time || '00:00:00';
+      const bStartTime = b.start_time || '00:00:00';
+      
+      return aStartTime.localeCompare(bStartTime);
+    });
+    
+    return groupedAndSortedSchedules;
   };
 
   const isScheduleCompleted = (scheduleId: string, date: Date) => {
@@ -756,6 +778,63 @@ export default function SchedulePage() {
   const getWeeklyDayLabelMobile = (day: number) => {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
     return days[day] || '알 수 없음';
+  };
+
+  // 가족 구성원별 배경색 결정 함수 (미완료 상태)
+  const getFamilyMemberBackgroundColor = (schedule: Schedule) => {
+    if (!schedule.family_members || schedule.family_members.length === 0) {
+      return 'bg-orange-50 border-orange-200'; // 가족 전체 - 주황색으로 변경
+    }
+    
+    // 첫 번째 구성원의 색상을 사용 (여러 명이면 첫 번째)
+    const firstMember = schedule.family_members[0];
+    switch (firstMember) {
+      case 'family': return 'bg-orange-50 border-orange-200';
+      case 'mom': return 'bg-pink-50 border-pink-200';
+      case 'dad': return 'bg-violet-50 border-violet-200';
+      case 'sein': return 'bg-blue-50 border-blue-200';
+      case 'seha': return 'bg-green-50 border-green-200';
+      default: return 'bg-gray-50 border-gray-200';
+    }
+  };
+
+  // 가족 구성원별 완료 상태 배경색 결정 함수 (진한 색상)
+  const getFamilyMemberCompletedBackgroundColor = (schedule: Schedule) => {
+    if (!schedule.family_members || schedule.family_members.length === 0) {
+      return 'bg-orange-100 border-orange-300'; // 가족 전체 완료 - 주황색으로 변경
+    }
+    
+    // 첫 번째 구성원의 색상을 사용 (여러 명이면 첫 번째)
+    const firstMember = schedule.family_members[0];
+    switch (firstMember) {
+      case 'family': return 'bg-orange-100 border-orange-300';
+      case 'mom': return 'bg-pink-100 border-pink-300';
+      case 'dad': return 'bg-violet-100 border-violet-300';
+      case 'sein': return 'bg-blue-100 border-blue-300';
+      case 'seha': return 'bg-green-100 border-green-300';
+      default: return 'bg-gray-100 border-gray-300';
+    }
+  };
+
+  // 모바일용 가족 구성원별 완료 상태 색상 결정 함수
+  const getFamilyMemberCompletedMobileColor = (daySchedules: Schedule[]) => {
+    if (daySchedules.length === 0) return 'bg-emerald-100 text-emerald-700';
+    
+    // 첫 번째 일정의 구성원 색상을 사용
+    const firstSchedule = daySchedules[0];
+    if (!firstSchedule.family_members || firstSchedule.family_members.length === 0) {
+      return 'bg-orange-100 text-orange-700'; // 가족 전체 - 주황색으로 변경
+    }
+    
+    const firstMember = firstSchedule.family_members[0];
+    switch (firstMember) {
+      case 'family': return 'bg-orange-100 text-orange-700';
+      case 'mom': return 'bg-pink-100 text-pink-700';
+      case 'dad': return 'bg-violet-100 text-violet-700';
+      case 'sein': return 'bg-blue-100 text-blue-700';
+      case 'seha': return 'bg-green-100 text-green-700';
+      default: return 'bg-gray-100 text-gray-700';
+    }
   };
 
   // 패턴 상세 정보 생성
@@ -1091,13 +1170,17 @@ export default function SchedulePage() {
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.FAMILY)}
                 className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.FAMILY) 
-                    ? 'bg-orange-100 border-orange-300 shadow-lg scale-105' 
+                    ? 'bg-orange-100 border-orange-400 shadow-xl scale-110 ring-2 ring-orange-300' 
                     : 'bg-orange-50 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
                 }`}
               >
                 <div className="text-center">
                   <div className="text-lg md:text-2xl mb-1 md:mb-2">👨‍👩‍👧‍👦</div>
-                  <div className="font-semibold text-orange-600 text-xs md:text-sm">가족</div>
+                  <div className={`font-semibold text-xs md:text-sm ${
+                    selectedFamilyMembers.includes(FAMILY_MEMBERS.FAMILY) 
+                      ? 'text-orange-800' 
+                      : 'text-orange-600'
+                  }`}>가족</div>
                 </div>
               </button>
 
@@ -1105,13 +1188,17 @@ export default function SchedulePage() {
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.MOM)}
                 className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.MOM) 
-                    ? 'bg-pink-100 border-pink-300 shadow-lg scale-105' 
+                    ? 'bg-pink-100 border-pink-400 shadow-xl scale-110 ring-2 ring-pink-300' 
                     : 'bg-pink-50 border-pink-200 hover:bg-pink-100 hover:border-pink-300'
                 }`}
               >
                 <div className="text-center">
                   <div className="text-lg md:text-2xl mb-1 md:mb-2">👩</div>
-                  <div className="font-semibold text-pink-600 text-xs md:text-sm">엄마</div>
+                  <div className={`font-semibold text-xs md:text-sm ${
+                    selectedFamilyMembers.includes(FAMILY_MEMBERS.MOM) 
+                      ? 'text-pink-800' 
+                      : 'text-pink-600'
+                  }`}>엄마</div>
                 </div>
               </button>
 
@@ -1119,13 +1206,17 @@ export default function SchedulePage() {
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.SEIN)}
                 className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.SEIN) 
-                    ? 'bg-blue-100 border-blue-300 shadow-lg scale-105' 
+                    ? 'bg-blue-100 border-blue-400 shadow-xl scale-110 ring-2 ring-blue-300' 
                     : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
                 }`}
               >
                 <div className="text-center">
                   <div className="text-lg md:text-2xl mb-1 md:mb-2">👨</div>
-                  <div className="font-semibold text-blue-600 text-xs md:text-sm">세인</div>
+                  <div className={`font-semibold text-xs md:text-sm ${
+                    selectedFamilyMembers.includes(FAMILY_MEMBERS.SEIN) 
+                      ? 'text-blue-800' 
+                      : 'text-blue-600'
+                  }`}>세인</div>
                 </div>
               </button>
 
@@ -1133,13 +1224,17 @@ export default function SchedulePage() {
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.SEHA)}
                 className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.SEHA) 
-                    ? 'bg-green-100 border-green-300 shadow-lg scale-105' 
+                    ? 'bg-green-100 border-green-400 shadow-xl scale-110 ring-2 ring-green-300' 
                     : 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
                 }`}
               >
                 <div className="text-center">
                   <div className="text-lg md:text-2xl mb-1 md:mb-2">👦</div>
-                  <div className="font-semibold text-green-600 text-xs md:text-sm">세하</div>
+                  <div className={`font-semibold text-xs md:text-sm ${
+                    selectedFamilyMembers.includes(FAMILY_MEMBERS.SEHA) 
+                      ? 'text-green-800' 
+                      : 'text-green-600'
+                  }`}>세하</div>
                 </div>
               </button>
 
@@ -1147,13 +1242,17 @@ export default function SchedulePage() {
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.DAD)}
                 className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.DAD) 
-                    ? 'bg-red-100 border-red-300 shadow-lg scale-105' 
-                    : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
+                    ? 'bg-violet-100 border-violet-400 shadow-xl scale-110 ring-2 ring-violet-300' 
+                    : 'bg-violet-50 border-violet-200 hover:bg-violet-100 hover:border-violet-300'
                 }`}
               >
                 <div className="text-center">
                   <div className="text-lg md:text-2xl mb-1 md:mb-2">👨</div>
-                  <div className="font-semibold text-red-600 text-xs md:text-sm">아빠</div>
+                  <div className={`font-semibold text-xs md:text-sm ${
+                    selectedFamilyMembers.includes(FAMILY_MEMBERS.DAD) 
+                      ? 'text-violet-800' 
+                      : 'text-violet-600'
+                  }`}>아빠</div>
                 </div>
               </button>
             </div> 
@@ -1943,13 +2042,8 @@ export default function SchedulePage() {
                                 
                                 return (
                                   <div className="text-xs space-y-1">
-                                    {hasTimeInfo && (
-                                      <div className="text-center py-1 bg-blue-50 text-blue-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
-                                        🕐
-                                      </div>
-                                    )}
                                     {completedCount > 0 && (
-                                      <div className="text-center py-1 bg-green-50 text-green-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                      <div className={`text-center py-1 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap ${getFamilyMemberCompletedMobileColor(daySchedules)}`}>
                                         C{completedCount}
                                       </div>
                                     )}
@@ -1971,7 +2065,7 @@ export default function SchedulePage() {
                                   <div
                                     key={schedule.id}
                                     className={`flex items-center justify-between p-2 rounded border text-xs ${
-                                      isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
+                                      isCompleted ? getFamilyMemberCompletedBackgroundColor(schedule) : getFamilyMemberBackgroundColor(schedule)
                                     }`}
                                     onClick={(e) => e.stopPropagation()}
                                   >
@@ -2055,13 +2149,8 @@ export default function SchedulePage() {
                               
                               return (
                                 <div className="text-xs space-y-1">
-                                  {hasTimeInfo && (
-                                    <div className="text-center py-1 bg-blue-50 text-blue-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
-                                      🕐
-                                    </div>
-                                  )}
                                   {completedCount > 0 && (
-                                    <div className="text-center py-1 bg-green-50 text-green-700 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap">
+                                    <div className={`text-center py-1 rounded-full w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center text-xs font-bold whitespace-nowrap ${getFamilyMemberCompletedMobileColor(daySchedules)}`}>
                                       C{completedCount}
                                     </div>
                                   )}
@@ -2079,13 +2168,13 @@ export default function SchedulePage() {
                           {daySchedules.map(schedule => {
                             const isCompleted = isScheduleCompleted(schedule.id, date);
                             return (
-                              <div
-                                key={schedule.id}
-                                className={`flex items-center justify-between p-2 rounded border text-xs ${
-                                  isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'
-                                }`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
+                                                          <div
+                              key={schedule.id}
+                              className={`flex items-center justify-between p-2 rounded border text-xs ${
+                                isCompleted ? getFamilyMemberCompletedBackgroundColor(schedule) : getFamilyMemberBackgroundColor(schedule)
+                              }`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
                                 <div className="flex items-center space-x-1 min-w-0 flex-1">
                                   <Badge className={`text-xs flex-shrink-0 ${getFrequencyColor(schedule.frequency)}`}>
                                     <div className="text-center">
@@ -2142,7 +2231,7 @@ export default function SchedulePage() {
                       <div
                         key={schedule.id}
                         className={`flex items-center justify-between p-3 rounded-lg border ${
-                          isCompleted ? 'bg-green-50 border-green-200' : 'bg-white'
+                          isCompleted ? getFamilyMemberCompletedBackgroundColor(schedule) : getFamilyMemberBackgroundColor(schedule)
                         }`}
                       >
                         <div className="flex items-center space-x-3 min-w-0 flex-1">
@@ -2177,6 +2266,9 @@ export default function SchedulePage() {
                         </div>
                         <div className="flex items-center space-x-2 flex-shrink-0">
                           <div className="flex items-center space-x-2">
+                            {isCompleted ? null : (
+                              <span className="text-lg" title="미완료">🚀</span>
+                            )}
                             <input
                               type="checkbox"
                               checked={isCompleted}
@@ -2184,9 +2276,6 @@ export default function SchedulePage() {
                               className="h-4 w-4 text-green-600 rounded border-gray-300 focus:ring-green-500 cursor-pointer"
                               title={isCompleted ? '완료됨 - 클릭하여 미완료로 변경' : '미완료 - 클릭하여 완료로 변경'}
                             />
-                            {isCompleted ? null : (
-                              <span className="text-lg" title="미완료">🚀</span>
-                            )}
                           </div>
                           <Button
                             variant="ghost"
@@ -2245,7 +2334,7 @@ export default function SchedulePage() {
                 {getCurrentPeriodSchedules().map((schedule) => (
                   <Card 
                     key={schedule.id} 
-                    className="hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer border border-blue-200 bg-blue-50"
+                    className={`hover:shadow-md hover:scale-[1.01] transition-all duration-200 cursor-pointer border-2 ${getFamilyMemberBackgroundColor(schedule)}`}
                     onClick={() => handleEdit(schedule)}
                   >
                     <CardContent className="p-4">
@@ -2335,7 +2424,7 @@ export default function SchedulePage() {
             {getFilteredSchedules().map((schedule) => (
               <Card 
                 key={schedule.id} 
-                className="hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer border-2 border-transparent hover:border-blue-200"
+                className={`hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer border-2 ${getFamilyMemberBackgroundColor(schedule)}`}
                 onClick={() => handleEdit(schedule)}
               >
                 <CardHeader>
