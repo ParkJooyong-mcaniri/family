@@ -1153,17 +1153,56 @@ export default function SchedulePage() {
             </div> 
           </div>
 
+          {/* 뷰 모드 선택과 액션 버튼들 */}
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">일정 관리</h1>
             <div className="flex space-x-2">
-              <Button variant="outline" onClick={loadAllData}>
-                새로고침
+              <Button
+                variant={viewMode === 'day' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('day')}
+              >
+                <List className="mr-2 h-4 w-4" />
+                일별
+              </Button>
+              <Button
+                variant={viewMode === 'week' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('week')}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                주별
+              </Button>
+              <Button
+                variant={viewMode === 'month' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setViewMode('month')}
+              >
+                <Grid3X3 className="mr-2 h-4 w-4" />
+                월별
+              </Button>
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={loadAllData}
+                className="p-2 h-9 w-9 bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 text-gray-700 hover:text-gray-900 transition-all duration-200"
+                title="새로고침"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
               </Button>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={handleAddNewSchedule}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    일정 추가
+                  <Button 
+                    onClick={handleAddNewSchedule}
+                    size="sm"
+                    className="p-2 h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                    title="일정 추가"
+                  >
+                    <Plus className="w-4 h-4" />
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -1670,35 +1709,7 @@ export default function SchedulePage() {
             </div>
           </div>
 
-          {/* 뷰 모드 선택 */}
-          <div className="flex justify-center mb-6">
-            <div className="flex space-x-2">
-              <Button
-                variant={viewMode === 'day' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('day')}
-              >
-                <List className="mr-2 h-4 w-4" />
-                일별
-              </Button>
-              <Button
-                variant={viewMode === 'week' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('week')}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                주별
-              </Button>
-              <Button
-                variant={viewMode === 'month' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('month')}
-              >
-                <Grid3X3 className="mr-2 h-4 w-4" />
-                월별
-              </Button>
-            </div>
-          </div>
+
 
           {/* 날짜 네비게이션 */}
           <div className="flex justify-between items-center mb-6">
@@ -2109,12 +2120,7 @@ export default function SchedulePage() {
                 <h3 className="text-lg font-semibold mb-2">
                   {format(currentDate, 'yyyy년 M월 d일 (EEEE)', { locale: ko })}
                 </h3>
-                {/* 디버깅 정보 */}
-                <div className="text-xs text-gray-500 mb-2 p-2 bg-white rounded border">
-                  <div>현재 선택된 날짜: {format(currentDate, 'yyyy-MM-dd')}</div>
-                  <div>오늘 날짜: {format(new Date(), 'yyyy-MM-dd')}</div>
-                  <div>일정 수: {getSchedulesForDate(currentDate).length}개</div>
-                </div>
+
                 <div className="space-y-2 max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-2">
                   {getSchedulesForDate(currentDate).map(schedule => {
                     const isCompleted = isScheduleCompleted(schedule.id, currentDate);
