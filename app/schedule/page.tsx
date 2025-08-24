@@ -1979,8 +1979,10 @@ export default function SchedulePage() {
                                         </div>
                                         {schedule.start_time && (
                                           <div className="text-xs text-gray-500 mt-1">
-                                            🕐 {formatTime(schedule.start_time)}
-                                            {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                            <span className="whitespace-nowrap">
+                                              🕐 {formatTime(schedule.start_time)}
+                                              {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                            </span>
                                           </div>
                                         )}
                                       </div>
@@ -2086,8 +2088,10 @@ export default function SchedulePage() {
                                     </div>
                                     {schedule.start_time && (
                                       <div className="text-xs text-gray-500 mt-1">
-                                        🕐 {formatTime(schedule.start_time)}
-                                        {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                        <span className="whitespace-nowrap">
+                                          🕐 {formatTime(schedule.start_time)}
+                                          {schedule.end_time && ` ~ ${formatTime(schedule.end_time)}`}
+                                        </span>
                                       </div>
                                     )}
                                   </div>
@@ -2145,13 +2149,12 @@ export default function SchedulePage() {
                             <h4 className={`font-medium truncate ${isCompleted ? 'line-through text-gray-500' : ''}`}>
                               {schedule.title}
                             </h4>
-                            <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
-                              {schedule.start_time && (
-                                <span>🕐 {formatTime(schedule.start_time)}</span>
-                              )}
-                              {schedule.end_time && (
-                                <span>~ {formatTime(schedule.end_time)}</span>
-                              )}
+                            <div className="flex items-center text-xs text-gray-500 mt-1">
+                              {schedule.start_time && schedule.end_time ? (
+                                <span className="whitespace-nowrap">🕐 {formatTime(schedule.start_time)} ~ {formatTime(schedule.end_time)}</span>
+                              ) : schedule.start_time ? (
+                                <span className="whitespace-nowrap">🕐 {formatTime(schedule.start_time)}</span>
+                              ) : null}
                             </div>
                             {schedule.description && (
                               <p className={`text-sm truncate ${isCompleted ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -2243,12 +2246,11 @@ export default function SchedulePage() {
                                 <Badge className={`text-xs ${getFrequencyColor(schedule.frequency)}`}>
                                   {getPatternDetail(schedule)}
                                 </Badge>
-                                {schedule.start_time && (
-                                  <span className="text-xs text-gray-500">🕐 {formatTime(schedule.start_time)}</span>
-                                )}
-                                {schedule.end_time && (
-                                  <span className="text-xs text-gray-500">~ {formatTime(schedule.end_time)}</span>
-                                )}
+                                {schedule.start_time && schedule.end_time ? (
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">🕐 {formatTime(schedule.start_time)} ~ {formatTime(schedule.end_time)}</span>
+                                ) : schedule.start_time ? (
+                                  <span className="text-xs text-gray-500 whitespace-nowrap">🕐 {formatTime(schedule.start_time)}</span>
+                                ) : null}
                                 {/* 가족 구성원 배지들 */}
                                 <div className="flex space-x-1">
                                   {schedule.family_members && Array.isArray(schedule.family_members) ? 

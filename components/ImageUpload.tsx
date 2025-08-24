@@ -237,11 +237,11 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
           const processedFile = file;
           console.log('원본 파일 사용, 변환 건너뛰기:', file.name, '타입:', file.type);
 
-          // 3단계: 파일 크기 검증
-          const maxFileSize = isMobile ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+          // 3단계: 파일 크기 검증 (리사이징 기능이 있으므로 제한을 늘림)
+          const maxFileSize = isMobile ? 20 * 1024 * 1024 : 25 * 1024 * 1024;
           if (processedFile.size > maxFileSize) {
             console.warn('파일 크기 초과:', processedFile.size, '>', maxFileSize);
-            alert(`파일 크기는 ${isMobile ? '3MB' : '5MB'} 이하여야 합니다.\n\n현재 파일: ${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
+            alert(`파일 크기는 ${isMobile ? '20MB' : '25MB'} 이하여야 합니다.\n\n현재 파일: ${(processedFile.size / 1024 / 1024).toFixed(2)}MB\n\n리사이징 기능을 활성화하면 자동으로 최적화됩니다.`);
             continue;
           }
 
@@ -387,7 +387,7 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         alert(`✅ 이미지 업로드 완료!\n\n${newImageUrls.length}개 파일이 성공적으로 업로드되었습니다.`);
       } else {
         console.log('업로드된 이미지가 없음');
-        alert('⚠️ 업로드할 수 있는 이미지가 없습니다.\n\n지원 형식: JPG, PNG, HEIC, WebP\n파일 크기: 3MB 이하');
+        alert('⚠️ 업로드할 수 있는 이미지가 없습니다.\n\n지원 형식: JPG, PNG, HEIC, WebP\n파일 크기: 모바일 20MB, 데스크톱 25MB 이하');
       }
       
     } catch (error) {
@@ -490,63 +490,69 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
         {images.length < maxImages && (
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
             
-            {/* 원본 파일 사용 안내 */}
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm text-blue-800 font-medium mb-1">
-                📱 이미지 업로드 최적화
-              </div>
-              <div className="text-xs text-blue-700">
-                이미지 변환이나 리사이징 없이 원본 파일을 그대로 업로드하여 품질을 보장합니다.
-              </div>
-            </div>
+            
             
             {/* 다운사이징 옵션 */}
-            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <div className="flex items-center space-x-2 mb-2">
-                <input
-                  type="checkbox"
-                  checked={enableDownsizing}
-                  onChange={(e) => setEnableDownsizing(e.target.checked)}
-                  className="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                />
-                <span className="text-sm text-green-800 font-medium">
-                  🖼️ 이미지 다운사이징 (선택사항)
-                </span>
+            <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl shadow-sm">
+              <div className="flex items-center space-x-3 mb-3">
+                <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full">
+                  <span className="text-green-600 text-lg">🖼️</span>
+                </div>
+                <div>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enableDownsizing}
+                      onChange={(e) => setEnableDownsizing(e.target.checked)}
+                      className="w-4 h-4 text-green-600 bg-white border-green-300 rounded focus:ring-green-500 focus:ring-2 transition-all duration-200"
+                    />
+                    <span className="text-sm font-semibold text-green-800">
+                      이미지 최적화
+                    </span>
+                  </label>
+                  <p className="text-xs text-green-600 mt-1">용량을 줄이고 로딩 속도를 개선해요</p>
+                </div>
               </div>
               
               {enableDownsizing && (
-                <div className="space-y-2 ml-6">
-                  <div className="flex items-center space-x-2">
-                    <label className="text-xs text-green-700">최대 크기:</label>
-                    <select
-                      value={maxImageSize}
-                      onChange={(e) => setMaxImageSize(Number(e.target.value))}
-                      className="text-xs border border-green-200 rounded px-2 py-1"
-                    >
-                      <option value={800}>800px</option>
-                      <option value={1200}>1200px</option>
-                      <option value={1600}>1600px</option>
-                      <option value={2000}>2000px</option>
-                    </select>
+                <div className="ml-11 space-y-3 animate-in slide-in-from-top-2 duration-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-green-700 flex items-center space-x-1">
+                        <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                        최대 크기
+                      </label>
+                      <select
+                        value={maxImageSize}
+                        onChange={(e) => setMaxImageSize(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm bg-white border border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 shadow-sm"
+                      >
+                        <option value={800}>800px (소형)</option>
+                        <option value={1200}>1200px (중형)</option>
+                        <option value={1600}>1600px (대형)</option>
+                        <option value={2000}>2000px (초대형)</option>
+                      </select>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-green-700 flex items-center space-x-1">
+                        <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                        이미지 품질
+                      </label>
+                      <select
+                        value={downsizeQuality}
+                        onChange={(e) => setDownsizeQuality(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm bg-white border border-green-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 shadow-sm"
+                      >
+                        <option value={0.6}>낮음 (60%) - 용량 절약</option>
+                        <option value={0.8}>보통 (80%) - 균형</option>
+                        <option value={0.9}>높음 (90%) - 고품질</option>
+                        <option value={0.95}>최고 (95%) - 프리미엄</option>
+                      </select>
+                    </div>
                   </div>
                   
-                  <div className="flex items-center space-x-2">
-                    <label className="text-xs text-green-700">품질:</label>
-                    <select
-                      value={downsizeQuality}
-                      onChange={(e) => setDownsizeQuality(Number(e.target.value))}
-                      className="text-xs border border-green-200 rounded px-2 py-1"
-                    >
-                      <option value={0.6}>낮음 (60%)</option>
-                      <option value={0.8}>보통 (80%)</option>
-                      <option value={0.9}>높음 (90%)</option>
-                      <option value={0.95}>최고 (95%)</option>
-                    </select>
-                  </div>
                   
-                  <div className="text-xs text-green-600">
-                    💡 다운사이징을 활성화하면 이미지 크기와 품질을 조절하여 파일 크기를 줄일 수 있습니다.
-                  </div>
                 </div>
               )}
             </div>
@@ -622,11 +628,11 @@ export function ImageUpload({ images, onImagesChange, maxImages = 5 }: ImageUplo
             )}
             
             <p className="text-xs text-gray-500 mt-2">
-              {isMobile ? 'JPG, PNG, HEIC 파일 지원 (최대 3MB, 자동 변환 및 리사이징)' : 'JPG, PNG, HEIC 파일 지원 (최대 5MB, 자동 변환 및 리사이징)'}
+              {isMobile ? 'JPG, PNG, HEIC (최대 20MB, 자동 변환 및 리사이징)' : 'JPG, PNG, HEIC(최대 25MB, 자동 변환 및 리사이징)'}
             </p>
             {isMobile && (
               <p className="text-xs text-blue-600 mt-1">
-                📱 아이폰: 사진 선택 또는 카메라로 촬영 가능, HEIC 파일도 자동으로 JPEG로 변환됩니다
+                📱 아이폰: 사진 선택 또는 카메라로 촬영 가능해요
               </p>
             )}
             {isUploading && (
