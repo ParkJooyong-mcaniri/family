@@ -1074,86 +1074,83 @@ export default function SchedulePage() {
         <div className="bg-white rounded-lg shadow-md p-6">
           {/* 가족 구성원 필터 */}
           <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <h3 className="text-lg font-semibold text-gray-900 mb-3">가족 구성원별 일정 보기</h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">{
+                selectedFamilyMembers.length > 0
+                  ? selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')
+                  : '모두'
+              }의 일정</h3>
+            <div className="grid grid-cols-5 gap-2 md:gap-3">
               {/* 가족 구성원 버튼들 - 대시보드와 동일한 스타일 */}
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.FAMILY)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.FAMILY) 
                     ? 'bg-orange-100 border-orange-300 shadow-lg scale-105' 
                     : 'bg-orange-50 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
                 }`}
               >
                 <div className="text-center">
-                  <div className="text-2xl mb-2">👨‍👩‍👧‍👦</div>
-                  <div className="font-semibold text-orange-600">가족</div>
+                  <div className="text-lg md:text-2xl mb-1 md:mb-2">👨‍👩‍👧‍👦</div>
+                  <div className="font-semibold text-orange-600 text-xs md:text-sm">가족</div>
                 </div>
               </button>
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.MOM)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.MOM) 
                     ? 'bg-pink-100 border-pink-300 shadow-lg scale-105' 
                     : 'bg-pink-50 border-pink-200 hover:bg-pink-100 hover:border-pink-300'
                 }`}
               >
                 <div className="text-center">
-                  <div className="text-2xl mb-2">👩</div>
-                  <div className="font-semibold text-pink-600">엄마</div>
+                  <div className="text-lg md:text-2xl mb-1 md:mb-2">👩</div>
+                  <div className="font-semibold text-pink-600 text-xs md:text-sm">엄마</div>
                 </div>
               </button>
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.SEIN)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.SEIN) 
                     ? 'bg-blue-100 border-blue-300 shadow-lg scale-105' 
                     : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
                 }`}
               >
                 <div className="text-center">
-                  <div className="text-2xl mb-2">👨</div>
-                  <div className="font-semibold text-blue-600">세인</div>
+                  <div className="text-lg md:text-2xl mb-1 md:mb-2">👨</div>
+                  <div className="font-semibold text-blue-600 text-xs md:text-sm">세인</div>
                 </div>
               </button>
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.SEHA)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.SEHA) 
                     ? 'bg-green-100 border-green-300 shadow-lg scale-105' 
                     : 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
                 }`}
               >
                 <div className="text-center">
-                  <div className="text-2xl mb-2">👦</div>
-                  <div className="font-semibold text-green-600">세하</div>
+                  <div className="text-lg md:text-2xl mb-1 md:mb-2">👦</div>
+                  <div className="font-semibold text-green-600 text-xs md:text-sm">세하</div>
                 </div>
               </button>
 
               <button
                 onClick={() => handleFamilyMemberToggle(FAMILY_MEMBERS.DAD)}
-                className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                   selectedFamilyMembers.includes(FAMILY_MEMBERS.DAD) 
                     ? 'bg-red-100 border-red-300 shadow-lg scale-105' 
                     : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
                 }`}
               >
                 <div className="text-center">
-                  <div className="text-2xl mb-2">👨</div>
-                  <div className="font-semibold text-red-600">아빠</div>
+                  <div className="text-lg md:text-2xl mb-1 md:mb-2">👨</div>
+                  <div className="font-semibold text-red-600 text-xs md:text-sm">아빠</div>
                 </div>
               </button>
-            </div>
-            <div className="mt-3 text-sm text-gray-600">
-              선택된 구성원: {
-                selectedFamilyMembers.length > 0
-                  ? selectedFamilyMembers.map(member => FAMILY_MEMBER_LABELS[member]).join(', ')
-                  : '전체 (모든 구성원의 일정 표시)'
-              }
-            </div>
+            </div> 
           </div>
 
           <div className="flex justify-between items-center mb-6">
@@ -1204,7 +1201,7 @@ export default function SchedulePage() {
                       <label className="text-sm font-medium text-gray-700 mb-2 block">
                         대상 구성원
                       </label>
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                      <div className="grid grid-cols-5 gap-2 md:gap-3">
                         {/* 가족 구성원 버튼들 - 대시보드와 동일한 스타일 */}
                         <button
                           type="button"
@@ -1215,15 +1212,15 @@ export default function SchedulePage() {
                               family_members: isSelected ? [] : ['family'] 
                             }));
                           }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                          className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                             formData.family_members.includes(FAMILY_MEMBERS.FAMILY) 
                               ? 'bg-orange-100 border-orange-300 shadow-lg scale-105' 
                               : 'bg-orange-50 border-orange-200 hover:bg-orange-100 hover:border-orange-300'
                           }`}
                         >
                           <div className="text-center">
-                            <div className="text-2xl mb-2">👨‍👩‍👧‍👦</div>
-                            <div className="font-semibold text-orange-600">가족</div>
+                            <div className="text-lg md:text-2xl mb-1 md:mb-2">👨‍👩‍👧‍👦</div>
+                            <div className="font-semibold text-orange-600 text-xs md:text-sm">가족</div>
                           </div>
                         </button>
 
@@ -1245,15 +1242,15 @@ export default function SchedulePage() {
                               }));
                             }
                           }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                          className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                             formData.family_members.includes(FAMILY_MEMBERS.MOM) 
                               ? 'bg-pink-100 border-pink-300 shadow-lg scale-105' 
                               : 'bg-pink-50 border-pink-200 hover:bg-pink-100 hover:border-pink-300'
                           }`}
                         >
                           <div className="text-center">
-                            <div className="text-2xl mb-2">👩</div>
-                            <div className="font-semibold text-pink-600">엄마</div>
+                            <div className="text-lg md:text-2xl mb-1 md:mb-2">👩</div>
+                            <div className="font-semibold text-pink-600 text-xs md:text-sm">엄마</div>
                           </div>
                         </button>
 
@@ -1275,15 +1272,15 @@ export default function SchedulePage() {
                               }));
                             }
                           }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                          className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                             formData.family_members.includes(FAMILY_MEMBERS.SEIN) 
                               ? 'bg-blue-100 border-blue-300 shadow-lg scale-105' 
                               : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300'
                           }`}
                         >
                           <div className="text-center">
-                            <div className="text-2xl mb-2">👨</div>
-                            <div className="font-semibold text-blue-600">세인</div>
+                            <div className="text-lg md:text-2xl mb-1 md:mb-2">👨</div>
+                            <div className="font-semibold text-blue-600 text-xs md:text-sm">세인</div>
                           </div>
                         </button>
 
@@ -1305,15 +1302,15 @@ export default function SchedulePage() {
                               }));
                             }
                           }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                          className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                             formData.family_members.includes(FAMILY_MEMBERS.SEHA) 
                               ? 'bg-green-100 border-green-300 shadow-lg scale-105' 
                               : 'bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300'
                           }`}
                         >
                           <div className="text-center">
-                            <div className="text-2xl mb-2">👦</div>
-                            <div className="font-semibold text-green-600">세하</div>
+                            <div className="text-lg md:text-2xl mb-1 md:mb-2">👦</div>
+                            <div className="font-semibold text-green-600 text-xs md:text-sm">세하</div>
                           </div>
                         </button>
 
@@ -1335,15 +1332,15 @@ export default function SchedulePage() {
                               }));
                             }
                           }}
-                          className={`p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
+                          className={`p-2 md:p-4 rounded-lg border-2 transition-all duration-200 cursor-pointer hover:scale-105 ${
                             formData.family_members.includes(FAMILY_MEMBERS.DAD) 
                               ? 'bg-red-100 border-red-300 shadow-lg scale-105' 
                               : 'bg-red-50 border-red-200 hover:bg-red-100 hover:border-red-300'
                           }`}
                         >
                           <div className="text-center">
-                            <div className="text-2xl mb-2">👨</div>
-                            <div className="font-semibold text-red-600">아빠</div>
+                            <div className="text-lg md:text-2xl mb-1 md:mb-2">👨</div>
+                            <div className="font-semibold text-red-600 text-xs md:text-sm">아빠</div>
                           </div>
                         </button>
                       </div>
