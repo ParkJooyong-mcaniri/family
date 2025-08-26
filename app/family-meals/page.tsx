@@ -7,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 import { useState, useEffect, useRef } from "react";
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, List, ChefHat } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addDays, subDays, isToday, isSameMonth } from "date-fns";
@@ -14,6 +16,7 @@ import { ko } from "date-fns/locale";
 import { familyMealsApi, mealsApi, FamilyMeal, Meal } from "@/lib/supabase-client";
 
 export default function FamilyMealsPage() {
+  const { toast } = useToast();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
@@ -38,6 +41,7 @@ export default function FamilyMealsPage() {
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
   const [lastEnterPressed, setLastEnterPressed] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
 
 
@@ -206,11 +210,24 @@ export default function FamilyMealsPage() {
   };
 
   const handleSaveMeal = async () => {
-    if (!selectedDate || !selectedMealType || tempMenuList.length === 0) return;
+    console.log('handleSaveMeal 호출됨:', { selectedDate, selectedMealType, tempMenuList });
+    
+    if (!selectedDate || !selectedMealType || tempMenuList.length === 0) {
+      console.log('저장 조건 불충족:', { selectedDate, selectedMealType, tempMenuListLength: tempMenuList.length });
+      toast({
+        title: "저장할 수 없습니다",
+        description: "날짜, 식사 시간, 메뉴를 모두 선택해주세요.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSaving(true); // 저장 시작
 
     try {
       const dateKey = format(selectedDate, "yyyy-MM-dd");
       const existingMeal = familyMeals.find(fm => fm.date === dateKey);
+      console.log('기존 식단:', existingMeal);
       
       // 신규 메뉴들을 식단리스트에 자동 추가
       for (const menuName of tempMenuList) {
@@ -235,15 +252,37 @@ export default function FamilyMealsPage() {
         }
       }
       
+      // 중복 체크 강화 - 기존 메뉴와 새 메뉴를 합치되 중복 제거
+      const getUniqueMenus = (existingMenus: string[] | null, newMenus: string[]) => {
+        if (!existingMenus || !Array.isArray(existingMenus)) return newMenus;
+        
+        const existingSet = new Set(existingMenus.map(menu => menu.toLowerCase()));
+        const uniqueNewMenus = newMenus.filter(menu => !existingSet.has(menu.toLowerCase()));
+        
+        // 기존 메뉴 + 새로운 고유 메뉴
+        return [...existingMenus, ...uniqueNewMenus];
+      };
+
       const mealData = {
         date: dateKey,
         breakfast: selectedMealType === 'breakfast' ? tempMenuList : (existingMeal?.breakfast || []),
-        lunch: selectedMealType === 'lunch' ? tempMenuList : (existingMeal?.breakfast || []),
-        dinner: selectedMealType === 'dinner' ? tempMenuList : (existingMeal?.breakfast || []),
+        lunch: selectedMealType === 'lunch' ? tempMenuList : (existingMeal?.lunch || []),
+        dinner: selectedMealType === 'dinner' ? tempMenuList : (existingMeal?.dinner || []),
       };
 
+      console.log('저장할 식단 데이터:', mealData);
       await familyMealsApi.upsert(mealData);
+      console.log('가족 식단 저장 완료');
+      
       await loadData(); // 데이터 다시 로드하여 신규 메뉴도 포함
+      console.log('데이터 다시 로드 완료');
+
+      // 성공 메시지
+      toast({
+        title: "저장 완료!",
+        description: "식단이 성공적으로 저장되었습니다.",
+        variant: "default",
+      });
 
       // Reset form
       setSelectedMealType("");
@@ -252,7 +291,13 @@ export default function FamilyMealsPage() {
       setIsDialogOpen(false);
     } catch (error) {
       console.error('Failed to save meal:', error);
-      alert('저장에 실패했습니다.');
+      toast({
+        title: "저장 실패",
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false); // 저장 완료 (성공/실패 상관없이)
     }
   };
 
@@ -307,8 +352,10 @@ export default function FamilyMealsPage() {
   };
 
   const handleAutocompleteSelect = (mealName: string) => {
+    console.log('handleAutocompleteSelect 호출됨:', mealName);
     setMealName(mealName);
     setShowAutocomplete(false);
+    console.log('자동완성 선택 완료, mealName 설정됨:', mealName);
   };
 
   const getMealForDate = (date: Date) => {
@@ -1283,7 +1330,7 @@ export default function FamilyMealsPage() {
                   메뉴
                 </label>
                 <div className="space-y-2">
-                  <div className="relative autocomplete-container">
+                  <div className="relative autocomplete-container" style={{ position: 'relative', zIndex: 1000 }}>
                     <div className="flex space-x-2">
                       <div className="relative flex-1">
                         <Input
@@ -1330,22 +1377,39 @@ export default function FamilyMealsPage() {
                     
                     {/* 자동완성 드롭다운 */}
                     {showAutocomplete && mealName.length >= 1 && filteredAutocomplete.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                      <div 
+                        className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl z-[9999] max-h-48 overflow-y-auto"
+                        style={{ position: 'absolute', zIndex: 9999 }}
+                      >
                         {filteredAutocomplete.map((meal, index) => (
-                          <button
+                          <div
                             key={meal.id}
-                            type="button"
-                            onClick={() => handleAutocompleteSelect(meal.meal_name)}
-                            className={`w-full text-left px-3 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ${
+                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none active:bg-gray-100 touch-manipulation cursor-pointer select-none border-b border-gray-100 last:border-b-0 ${
                               index === selectedAutocompleteIndex ? 'bg-gray-100' : ''
                             }`}
                             onMouseEnter={() => setSelectedAutocompleteIndex(index)}
+                            onClick={() => {
+                              console.log('자동완성 메뉴 클릭됨:', meal.meal_name);
+                              handleAutocompleteSelect(meal.meal_name);
+                            }}
+                            onMouseDown={() => {
+                              console.log('자동완성 메뉴 마우스다운됨:', meal.meal_name);
+                              handleAutocompleteSelect(meal.meal_name);
+                            }}
+                            onPointerDown={() => {
+                              console.log('자동완성 메뉴 포인터다운됨:', meal.meal_name);
+                              handleAutocompleteSelect(meal.meal_name);
+                            }}
+                            onTouchStart={() => {
+                              console.log('자동완성 메뉴 터치됨:', meal.meal_name);
+                              handleAutocompleteSelect(meal.meal_name);
+                            }}
                           >
                             <div className="font-medium text-gray-900">{meal.meal_name}</div>
                             <div className="text-xs text-gray-500">
                               호응도: {meal.family_preference}
                             </div>
-                          </button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -1397,11 +1461,11 @@ export default function FamilyMealsPage() {
               </div>
 
               <div className="flex justify-end space-x-2">
-                <Button variant="outline" onClick={handleDialogClose}>
+                <Button variant="outline" onClick={handleDialogClose} disabled={isSaving}>
                   취소
                 </Button>
-                <Button onClick={handleSaveMeal}>
-                  저장
+                <Button onClick={handleSaveMeal} disabled={isSaving}>
+                  {isSaving ? '저장 중...' : '저장'}
                 </Button>
               </div>
             </div>
