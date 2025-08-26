@@ -76,9 +76,9 @@ export interface Meal {
 export interface FamilyMeal {
   id: string
   date: string
-  breakfast: string | null
-  lunch: string | null
-  dinner: string | null
+  breakfast: string[] | null
+  lunch: string[] | null
+  dinner: string[] | null
   created_at: string
   updated_at: string
 }

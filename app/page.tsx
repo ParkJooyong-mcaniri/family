@@ -43,9 +43,9 @@ export default function Home() {
   const [familyMeals, setFamilyMeals] = useState<{
     id: string;
     date: string;
-    breakfast?: string | null;
-    lunch?: string | null;
-    dinner?: string | null;
+    breakfast?: string[] | null;
+    lunch?: string[] | null;
+    dinner?: string[] | null;
   }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -812,7 +812,16 @@ export default function Home() {
                         const today = new Date();
                         const todayKey = format(today, 'yyyy-MM-dd');
                         const todayMeal = familyMeals.find(fm => fm.date === todayKey);
-                        return todayMeal?.breakfast || '등록된 식단이 없습니다';
+                        if (!todayMeal?.breakfast) return '등록된 식단이 없습니다';
+                        
+                        if (Array.isArray(todayMeal.breakfast)) {
+                          return todayMeal.breakfast.map((menu, idx) => (
+                            <div key={idx} className="mb-2 last:mb-0">
+                              • {menu}
+                            </div>
+                          ));
+                        }
+                        return todayMeal.breakfast;
                       })()}
                     </div>
                   </div>
@@ -831,7 +840,16 @@ export default function Home() {
                         const today = new Date();
                         const todayKey = format(today, 'yyyy-MM-dd');
                         const todayMeal = familyMeals.find(fm => fm.date === todayKey);
-                        return todayMeal?.lunch || '등록된 식단이 없습니다';
+                        if (!todayMeal?.lunch) return '등록된 식단이 없습니다';
+                        
+                        if (Array.isArray(todayMeal.lunch)) {
+                          return todayMeal.lunch.map((menu, idx) => (
+                            <div key={idx} className="mb-2 last:mb-0">
+                              • {menu}
+                            </div>
+                          ));
+                        }
+                        return todayMeal.lunch;
                       })()}
                     </div>
                   </div>
@@ -850,7 +868,16 @@ export default function Home() {
                         const today = new Date();
                         const todayKey = format(today, 'yyyy-MM-dd');
                         const todayMeal = familyMeals.find(fm => fm.date === todayKey);
-                        return todayMeal?.dinner || '등록된 식단이 없습니다';
+                        if (!todayMeal?.dinner) return '등록된 식단이 없습니다';
+                        
+                        if (Array.isArray(todayMeal.dinner)) {
+                          return todayMeal.dinner.map((menu, idx) => (
+                            <div key={idx} className="mb-2 last:mb-0">
+                              • {menu}
+                          </div>
+                        ));
+                        }
+                        return todayMeal.dinner;
                       })()}
                     </div>
                   </div>

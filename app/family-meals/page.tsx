@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Calendar as CalendarIcon, Plus, ChevronLeft, ChevronRight, CalendarDays, Clock, List, ChefHat } from "lucide-react";
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addDays, subDays, isToday, isSameMonth } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -19,12 +19,27 @@ export default function FamilyMealsPage() {
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('day');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<string>("");
-  const [mealName, setMealName] = useState("");
+  const [mealName, setMealName] = useState<string>("");
+  const [selectedMeals, setSelectedMeals] = useState<{
+    breakfast: string[];
+    lunch: string[];
+    dinner: string[];
+  }>({
+    breakfast: [],
+    lunch: [],
+    dinner: []
+  });
+  
+  // 임시 메뉴 리스트 상태 (현재 입력 중인 메뉴들)
+  const [tempMenuList, setTempMenuList] = useState<string[]>([]);
   const [familyMeals, setFamilyMeals] = useState<FamilyMeal[]>([]);
   const [availableMeals, setAvailableMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
+  const [lastEnterPressed, setLastEnterPressed] = useState(false);
+  
+
 
   const mealTypes = [
     { value: "breakfast", label: "아침" },
@@ -74,6 +89,39 @@ export default function FamilyMealsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // 다이얼로그가 열릴 때 기존 메뉴들을 임시 리스트에 로드
+  useEffect(() => {
+    if (isDialogOpen && selectedDate && selectedMealType) {
+      const dateKey = format(selectedDate, "yyyy-MM-dd");
+      const existingMeal = familyMeals.find(fm => fm.date === dateKey);
+      if (existingMeal) {
+        const mealType = selectedMealType as 'breakfast' | 'lunch' | 'dinner';
+        const menus = existingMeal[mealType] || [];
+        const menuArray = Array.isArray(menus) ? menus : [];
+        setTempMenuList(menuArray);
+        // 수정창에서는 텍스트박스를 비워두고 임시 리스트에만 표시
+        setMealName('');
+      } else {
+        // 해당 날짜에 식단이 없는 경우
+        setTempMenuList([]);
+        setMealName('');
+      }
+    }
+  }, [isDialogOpen, selectedDate, selectedMealType, familyMeals]);
+
+  // mealName 상태 변화 추적 및 엔터키 입력 감지
+  useEffect(() => {
+    if (lastEnterPressed && mealName.trim()) {
+      const currentMealName = mealName.trim();
+      // 상태를 즉시 비우기
+      setMealName('');
+      // 메뉴 추가
+      addToTempList(currentMealName);
+      // 엔터키 플래그 초기화
+      setLastEnterPressed(false);
+    }
+  }, [mealName, lastEnterPressed]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -91,51 +139,107 @@ export default function FamilyMealsPage() {
   };
 
   // 자동완성용 필터링 (현재 입력된 텍스트와 일치하는 메뉴들)
-  const filteredAutocomplete = mealName.length >= 1 ? availableMeals.filter(meal =>
+  const filteredAutocomplete = typeof mealName === 'string' && mealName.length >= 1 ? availableMeals.filter(meal =>
     meal.meal_name.toLowerCase().includes(mealName.toLowerCase())
   ).slice(0, 8) : []; // 최대 8개까지만 표시, 1글자 이상 입력 시에만 표시
+
+  // 임시 리스트에 메뉴 추가
+  const addToTempList = (menuName: string) => {
+    const trimmedName = menuName.trim();
+    
+    // 빈 문자열 체크
+    if (!trimmedName) {
+      return;
+    }
+    
+    // 중복 체크 강화
+    if (tempMenuList.includes(trimmedName)) {
+      return;
+    }
+    
+    // 메뉴 추가
+    setTempMenuList(prev => [...prev, trimmedName]);
+  };
+
+  // 임시 리스트에서 메뉴 제거
+  const removeFromTempList = (menuName: string) => {
+    setTempMenuList(prev => prev.filter(menu => menu !== menuName));
+  };
+
+  // 체크 버튼 클릭 시 임시 리스트에 추가
+  const handleAddToTempList = () => {
+    if (mealName.trim()) {
+      const currentMealName = mealName.trim();
+      // 상태를 즉시 비우기
+      setMealName('');
+      // 약간의 지연 후 메뉴 추가 (상태 업데이트 완료 대기)
+      requestAnimationFrame(() => {
+        addToTempList(currentMealName);
+      });
+    }
+  };
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
     if (date) {
+      // 해당 날짜의 기존 메뉴들을 미리 로드
+      const dateKey = format(date, "yyyy-MM-dd");
+      const existingMeal = familyMeals.find(fm => fm.date === dateKey);
+      if (existingMeal) {
+        setSelectedMeals({
+          breakfast: Array.isArray(existingMeal.breakfast) ? existingMeal.breakfast : [],
+          lunch: Array.isArray(existingMeal.lunch) ? existingMeal.lunch : [],
+          dinner: Array.isArray(existingMeal.dinner) ? existingMeal.dinner : []
+        });
+      } else {
+        setSelectedMeals({
+          breakfast: [],
+          lunch: [],
+          dinner: []
+        });
+      }
+      // 임시 리스트 초기화
+      setTempMenuList([]);
+      setMealName('');
       setIsDialogOpen(true);
     }
   };
 
   const handleSaveMeal = async () => {
-    if (!selectedDate || !selectedMealType || !mealName.trim()) return;
+    if (!selectedDate || !selectedMealType || tempMenuList.length === 0) return;
 
     try {
       const dateKey = format(selectedDate, "yyyy-MM-dd");
       const existingMeal = familyMeals.find(fm => fm.date === dateKey);
       
-      // 신규 메뉴인지 확인 (기존 등록된 메뉴에 없는 경우)
-      const isNewMeal = !availableMeals.some(meal => 
-        meal.meal_name.toLowerCase() === mealName.trim().toLowerCase()
-      );
-
-      // 신규 메뉴인 경우 식단리스트에 자동 추가
-      if (isNewMeal) {
-        try {
-          const newMealData = {
-            meal_name: mealName.trim(),
-            family_preference: "Not Yet" as const, // 기본값
-            status: true, // 캘린더 노출 기본값
-          };
-          
-          await mealsApi.create(newMealData);
-          console.log('신규 메뉴가 식단리스트에 자동 추가되었습니다:', mealName.trim());
-        } catch (mealCreateError) {
-          console.warn('신규 메뉴 자동 추가 실패:', mealCreateError);
-          // 신규 메뉴 추가 실패해도 가족 식단 저장은 계속 진행
+      // 신규 메뉴들을 식단리스트에 자동 추가
+      for (const menuName of tempMenuList) {
+        const isNewMeal = !availableMeals.some(meal => 
+          meal.meal_name.toLowerCase() === menuName.toLowerCase()
+        );
+        
+        if (isNewMeal) {
+          try {
+            const newMealData = {
+              meal_name: menuName,
+              family_preference: "Not Yet" as const, // 기본값
+              status: true, // 캘린더 노출 기본값
+            };
+            
+            await mealsApi.create(newMealData);
+            console.log('신규 메뉴가 식단리스트에 자동 추가되었습니다:', menuName);
+          } catch (mealCreateError) {
+            console.warn('신규 메뉴 자동 추가 실패:', mealCreateError);
+            // 신규 메뉴 추가 실패해도 가족 식단 저장은 계속 진행
+          }
         }
       }
       
       const mealData = {
         date: dateKey,
-        breakfast: selectedMealType === 'breakfast' ? mealName.trim() : existingMeal?.breakfast || null,
-        lunch: selectedMealType === 'lunch' ? mealName.trim() : existingMeal?.lunch || null,
-        dinner: selectedMealType === 'dinner' ? mealName.trim() : existingMeal?.dinner || null,
+        breakfast: selectedMealType === 'breakfast' ? tempMenuList : (existingMeal?.breakfast || []),
+        lunch: selectedMealType === 'lunch' ? tempMenuList : (existingMeal?.breakfast || []),
+        dinner: selectedMealType === 'dinner' ? tempMenuList : (existingMeal?.breakfast || []),
       };
 
       await familyMealsApi.upsert(mealData);
@@ -144,6 +248,7 @@ export default function FamilyMealsPage() {
       // Reset form
       setSelectedMealType("");
       setMealName("");
+      setTempMenuList([]);
       setIsDialogOpen(false);
     } catch (error) {
       console.error('Failed to save meal:', error);
@@ -154,13 +259,14 @@ export default function FamilyMealsPage() {
   const handleDialogClose = () => {
     setSelectedMealType("");
     setMealName("");
+    setTempMenuList([]);
     setIsDialogOpen(false);
     setShowAutocomplete(false);
     setSelectedAutocompleteIndex(0);
   };
 
   const handleMealSelect = (mealName: string) => {
-    setMealName(mealName);
+    addToTempList(mealName);
   };
 
   // 자동완성 관련 핸들러들
@@ -178,6 +284,7 @@ export default function FamilyMealsPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 자동완성이 열려있을 때만 화살표키와 이스케이프 처리
     if (!showAutocomplete || filteredAutocomplete.length === 0) return;
 
     switch (e.key) {
@@ -192,13 +299,6 @@ export default function FamilyMealsPage() {
         setSelectedAutocompleteIndex(prev => 
           prev > 0 ? prev - 1 : filteredAutocomplete.length - 1
         );
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (filteredAutocomplete[selectedAutocompleteIndex]) {
-          setMealName(filteredAutocomplete[selectedAutocompleteIndex].meal_name);
-          setShowAutocomplete(false);
-        }
         break;
       case 'Escape':
         setShowAutocomplete(false);
@@ -459,7 +559,14 @@ export default function FamilyMealsPage() {
                                     </Badge>
                                   </div>
                                   <div className="text-xs text-gray-700 break-words leading-tight px-1">
-                                    {dayMeals.breakfast}
+                                    {Array.isArray(dayMeals.breakfast) 
+                                      ? dayMeals.breakfast.map((menu, idx) => (
+                                          <div key={idx} className="mb-1 last:mb-0">
+                                            • {menu}
+                                          </div>
+                                        ))
+                                      : dayMeals.breakfast
+                                    }
                                   </div>
                                 </div>
                               )}
@@ -471,7 +578,14 @@ export default function FamilyMealsPage() {
                                     </Badge>
                                   </div>
                                   <div className="text-xs text-gray-700 break-words leading-tight px-1">
-                                    {dayMeals.lunch}
+                                    {Array.isArray(dayMeals.lunch) 
+                                      ? dayMeals.lunch.map((menu, idx) => (
+                                          <div key={idx} className="mb-1 last:mb-0">
+                                            • {menu}
+                                          </div>
+                                        ))
+                                      : dayMeals.lunch
+                                    }
                                   </div>
                                 </div>
                               )}
@@ -483,7 +597,14 @@ export default function FamilyMealsPage() {
                                     </Badge>
                                   </div>
                                   <div className="text-xs text-gray-700 break-words leading-tight px-1">
-                                    {dayMeals.dinner}
+                                    {Array.isArray(dayMeals.dinner) 
+                                      ? dayMeals.dinner.map((menu, idx) => (
+                                          <div key={idx} className="mb-1 last:mb-0">
+                                            • {menu}
+                                          </div>
+                                        ))
+                                      : dayMeals.dinner
+                                    }
                                   </div>
                                 </div>
                               )}
@@ -522,19 +643,46 @@ export default function FamilyMealsPage() {
                           {meal.breakfast && (
                             <div className="flex items-center space-x-2">
                               <Badge className="text-xs bg-blue-100 text-blue-800 w-12 text-center">아침</Badge>
-                              <span className="text-sm text-gray-700 break-words">{meal.breakfast}</span>
+                              <div className="text-sm text-gray-700 break-words">
+                                {Array.isArray(meal.breakfast) 
+                                  ? meal.breakfast.map((menu, idx) => (
+                                      <div key={idx} className="mb-1 last:mb-0">
+                                        • {menu}
+                                      </div>
+                                    ))
+                                  : meal.breakfast
+                                }
+                              </div>
                             </div>
                           )}
                           {meal.lunch && (
                             <div className="flex items-center space-x-2">
                               <Badge className="text-xs bg-green-100 text-green-800 w-12 text-center">점심</Badge>
-                              <span className="text-sm text-gray-700 break-words">{meal.lunch}</span>
+                              <div className="text-sm text-gray-700 break-words">
+                                {Array.isArray(meal.lunch) 
+                                  ? meal.lunch.map((menu, idx) => (
+                                      <div key={idx} className="mb-1 last:mb-0">
+                                        • {menu}
+                                      </div>
+                                    ))
+                                  : meal.lunch
+                                }
+                              </div>
                             </div>
                           )}
                           {meal.dinner && (
                             <div className="flex items-center space-x-2">
                               <Badge className="text-xs bg-purple-100 text-purple-800 w-12 text-center">저녁</Badge>
-                              <span className="text-sm text-gray-700 break-words">{meal.dinner}</span>
+                              <div className="text-sm text-gray-700 break-words">
+                                {Array.isArray(meal.dinner) 
+                                  ? meal.dinner.map((menu, idx) => (
+                                      <div key={idx} className="mb-1 last:mb-0">
+                                        • {menu}
+                                      </div>
+                                    ))
+                                  : meal.dinner
+                                }
+                              </div>
                             </div>
                           )}
                         </div>
@@ -621,7 +769,14 @@ export default function FamilyMealsPage() {
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-gray-700 break-words leading-tight px-1">
-                                  {dayMeals.breakfast}
+                                  {Array.isArray(dayMeals.breakfast) 
+                                    ? dayMeals.breakfast.map((menu, idx) => (
+                                        <div key={idx} className="mb-1 last:mb-0">
+                                          • {menu}
+                                        </div>
+                                      ))
+                                    : dayMeals.breakfast
+                                  }
                                 </div>
                               </div>
                             )}
@@ -633,7 +788,14 @@ export default function FamilyMealsPage() {
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-gray-700 break-words leading-tight px-1">
-                                  {dayMeals.lunch}
+                                  {Array.isArray(dayMeals.lunch) 
+                                    ? dayMeals.lunch.map((menu, idx) => (
+                                        <div key={idx} className="mb-1 last:mb-0">
+                                          • {menu}
+                                        </div>
+                                      ))
+                                    : dayMeals.lunch
+                                  }
                                 </div>
                               </div>
                             )}
@@ -645,7 +807,14 @@ export default function FamilyMealsPage() {
                                   </Badge>
                                 </div>
                                 <div className="text-xs text-gray-700 break-words leading-tight px-1">
-                                  {dayMeals.dinner}
+                                  {Array.isArray(dayMeals.dinner) 
+                                    ? dayMeals.dinner.map((menu, idx) => (
+                                        <div key={idx} className="mb-1 last:mb-0">
+                                          • {menu}
+                                        </div>
+                                      ))
+                                    : dayMeals.dinner
+                                  }
                                 </div>
                               </div>
                             )}
@@ -711,19 +880,46 @@ export default function FamilyMealsPage() {
                                 {item.meal.breakfast && (
                                   <div className="flex items-center space-x-2">
                                     <Badge className="text-xs bg-blue-100 text-blue-800 w-12 text-center">아침</Badge>
-                                    <span className="text-sm text-gray-700 break-words">{item.meal.breakfast}</span>
+                                    <div className="text-sm text-gray-700 break-words">
+                                      {Array.isArray(item.meal.breakfast) 
+                                        ? item.meal.breakfast.map((menu, idx) => (
+                                            <div key={idx} className="mb-1 last:mb-0">
+                                              • {menu}
+                                            </div>
+                                          ))
+                                        : item.meal.breakfast
+                                      }
+                                    </div>
                                   </div>
                                 )}
                                 {item.meal.lunch && (
                                   <div className="flex items-center space-x-2">
                                     <Badge className="text-xs bg-green-100 text-green-800 w-12 text-center">점심</Badge>
-                                    <span className="text-sm text-gray-700 break-words">{item.meal.lunch}</span>
+                                    <div className="text-sm text-gray-700 break-words">
+                                      {Array.isArray(item.meal.lunch) 
+                                        ? item.meal.lunch.map((menu, idx) => (
+                                            <div key={idx} className="mb-1 last:mb-0">
+                                              • {menu}
+                                          </div>
+                                        ))
+                                        : item.meal.lunch
+                                      }
+                                    </div>
                                   </div>
                                 )}
                                 {item.meal.dinner && (
                                   <div className="flex items-center space-x-2">
                                     <Badge className="text-xs bg-purple-100 text-purple-800 w-12 text-center">저녁</Badge>
-                                    <span className="text-sm text-gray-700 break-words">{item.meal.dinner}</span>
+                                    <div className="text-sm text-gray-700 break-words">
+                                      {Array.isArray(item.meal.dinner) 
+                                        ? item.meal.dinner.map((menu, idx) => (
+                                            <div key={idx} className="mb-1 last:mb-0">
+                                              • {menu}
+                                          </div>
+                                        ))
+                                        : item.meal.dinner
+                                      }
+                                    </div>
                                   </div>
                                 )}
                               </>
@@ -808,7 +1004,16 @@ export default function FamilyMealsPage() {
                                 아침
                               </Badge>
                               <div className="min-w-0 flex-1">
-                                <h4 className="font-medium truncate">{dayMeals.breakfast}</h4>
+                                <div className="min-w-0 flex-1">
+                                  {Array.isArray(dayMeals.breakfast) 
+                                    ? dayMeals.breakfast.map((menu, idx) => (
+                                        <div key={idx} className="mb-1 last:mb-0">
+                                          • {menu}
+                                        </div>
+                                      ))
+                                    : <h4 className="font-medium truncate">{dayMeals.breakfast}</h4>
+                                  }
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2 flex-shrink-0">
@@ -818,7 +1023,7 @@ export default function FamilyMealsPage() {
                                 onClick={() => {
                                   setSelectedDate(currentDate);
                                   setSelectedMealType('breakfast');
-                                  setMealName(dayMeals.breakfast || '');
+                                  setMealName(Array.isArray(dayMeals.breakfast) ? dayMeals.breakfast.join(', ') : (dayMeals.breakfast || ''));
                                   setIsDialogOpen(true);
                                 }}
                               >
@@ -834,7 +1039,16 @@ export default function FamilyMealsPage() {
                                 점심
                               </Badge>
                               <div className="min-w-0 flex-1">
-                                <h4 className="font-medium truncate">{dayMeals.lunch}</h4>
+                                <div className="min-w-0 flex-1">
+                                  {Array.isArray(dayMeals.lunch) 
+                                    ? dayMeals.lunch.map((menu, idx) => (
+                                        <div key={idx} className="mb-1 last:mb-0">
+                                          • {menu}
+                                        </div>
+                                      ))
+                                    : <h4 className="font-medium truncate">{dayMeals.lunch}</h4>
+                                  }
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2 flex-shrink-0">
@@ -844,7 +1058,7 @@ export default function FamilyMealsPage() {
                                 onClick={() => {
                                   setSelectedDate(currentDate);
                                   setSelectedMealType('lunch');
-                                  setMealName(dayMeals.lunch || '');
+                                  setMealName(Array.isArray(dayMeals.lunch) ? dayMeals.lunch.join(', ') : (dayMeals.lunch || ''));
                                   setIsDialogOpen(true);
                                 }}
                               >
@@ -860,7 +1074,16 @@ export default function FamilyMealsPage() {
                                 저녁
                               </Badge>
                               <div className="min-w-0 flex-1">
-                                <h4 className="font-medium truncate">{dayMeals.dinner}</h4>
+                                <div className="min-w-0 flex-1">
+                                  {Array.isArray(dayMeals.dinner) 
+                                    ? dayMeals.dinner.map((menu, idx) => (
+                                        <div key={idx} className="mb-1 last:mb-0">
+                                          • {menu}
+                                        </div>
+                                      ))
+                                    : <h4 className="font-medium truncate">{dayMeals.dinner}</h4>
+                                  }
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center space-x-2 flex-shrink-0">
@@ -870,7 +1093,7 @@ export default function FamilyMealsPage() {
                                 onClick={() => {
                                   setSelectedDate(currentDate);
                                   setSelectedMealType('dinner');
-                                  setMealName(dayMeals.dinner || '');
+                                  setMealName(Array.isArray(dayMeals.dinner) ? dayMeals.dinner.join(', ') : (dayMeals.dinner || ''));
                                   setIsDialogOpen(true);
                                 }}
                               >
@@ -900,7 +1123,16 @@ export default function FamilyMealsPage() {
                           <div className="flex items-center justify-center mb-2">
                             <Badge className="text-sm bg-blue-100 text-blue-800 px-3 py-1">🌅 아침</Badge>
                           </div>
-                          <div className="text-lg font-medium text-gray-800 break-words text-center">{todayMeal.breakfast}</div>
+                          <div className="text-lg font-medium text-gray-800 break-words text-center">
+                            {Array.isArray(todayMeal.breakfast) 
+                              ? todayMeal.breakfast.map((menu, idx) => (
+                                  <div key={idx} className="mb-2 last:mb-0">
+                                    • {menu}
+                                  </div>
+                                ))
+                              : todayMeal.breakfast
+                            }
+                          </div>
                         </div>
                       )}
                       {todayMeal.lunch && (
@@ -908,7 +1140,16 @@ export default function FamilyMealsPage() {
                           <div className="flex items-center justify-center mb-2">
                             <Badge className="text-sm bg-green-100 text-green-800 px-3 py-1">☀️ 점심</Badge>
                           </div>
-                          <div className="text-lg font-medium text-gray-800 break-words text-center">{todayMeal.lunch}</div>
+                          <div className="text-lg font-medium text-gray-800 break-words text-center">
+                            {Array.isArray(todayMeal.lunch) 
+                              ? todayMeal.lunch.map((menu, idx) => (
+                                  <div key={idx} className="mb-2 last:mb-0">
+                                    • {menu}
+                                  </div>
+                                ))
+                              : todayMeal.lunch
+                            }
+                          </div>
                         </div>
                       )}
                       {todayMeal.dinner && (
@@ -916,7 +1157,16 @@ export default function FamilyMealsPage() {
                           <div className="flex items-center justify-center mb-2">
                             <Badge className="text-sm bg-purple-100 text-purple-800 px-3 py-1">🌙 저녁</Badge>
                           </div>
-                          <div className="text-lg font-medium text-gray-800 break-words text-center">{todayMeal.dinner}</div>
+                          <div className="text-lg font-medium text-gray-800 break-words text-center">
+                            {Array.isArray(todayMeal.dinner) 
+                              ? todayMeal.dinner.map((menu, idx) => (
+                                  <div key={idx} className="mb-2 last:mb-0">
+                                    • {menu}
+                                  </div>
+                                ))
+                              : todayMeal.dinner
+                            }
+                          </div>
                         </div>
                       )}
                     </div>
@@ -953,7 +1203,17 @@ export default function FamilyMealsPage() {
                 <div className="grid grid-cols-3 gap-3">
                   <button
                     type="button"
-                    onClick={() => setSelectedMealType('breakfast')}
+                    onClick={() => {
+                      setSelectedMealType('breakfast');
+                      // 아침 메뉴들을 임시 리스트에 로드
+                      const dateKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
+                      const existingMeal = familyMeals.find(fm => fm.date === dateKey);
+                      const breakfastMenus = existingMeal?.breakfast || [];
+                      const menus = Array.isArray(breakfastMenus) ? breakfastMenus : [];
+                      setTempMenuList(menus);
+                      // 수정창에서는 텍스트박스를 비워두고 임시 리스트에만 표시
+                      setMealName('');
+                    }}
                     className={`p-4 rounded-xl border-2 transition-all duration-200 ${
                       selectedMealType === 'breakfast'
                         ? 'bg-blue-100 border-blue-300 shadow-md scale-105'
@@ -968,7 +1228,17 @@ export default function FamilyMealsPage() {
                   
                   <button
                     type="button"
-                    onClick={() => setSelectedMealType('lunch')}
+                    onClick={() => {
+                      setSelectedMealType('lunch');
+                      // 점심 메뉴들을 임시 리스트에 로드
+                      const dateKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
+                      const existingMeal = familyMeals.find(fm => fm.date === dateKey);
+                      const lunchMenus = existingMeal?.lunch || [];
+                      const menus = Array.isArray(lunchMenus) ? lunchMenus : [];
+                      setTempMenuList(menus);
+                      // 수정창에서는 텍스트박스를 비워두고 임시 리스트에만 표시
+                      setMealName('');
+                    }}
                     className={`p-4 rounded-xl border-2 transition-all duration-200 ${
                       selectedMealType === 'lunch'
                         ? 'bg-green-100 border-green-300 shadow-md scale-105'
@@ -983,7 +1253,17 @@ export default function FamilyMealsPage() {
                   
                   <button
                     type="button"
-                    onClick={() => setSelectedMealType('dinner')}
+                    onClick={() => {
+                      setSelectedMealType('dinner');
+                      // 저녁 메뉴들을 임시 리스트에 로드
+                      const dateKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : "";
+                      const existingMeal = familyMeals.find(fm => fm.date === dateKey);
+                      const dinnerMenus = existingMeal?.dinner || [];
+                      const menus = Array.isArray(dinnerMenus) ? dinnerMenus : [];
+                      setTempMenuList(menus);
+                      // 수정창에서는 텍스트박스를 비워두고 임시 리스트에만 표시
+                      setMealName('');
+                    }}
                     className={`p-4 rounded-xl border-2 transition-all duration-200 ${
                       selectedMealType === 'dinner'
                         ? 'bg-purple-100 border-purple-300 shadow-md scale-105'
@@ -1004,25 +1284,49 @@ export default function FamilyMealsPage() {
                 </label>
                 <div className="space-y-2">
                   <div className="relative autocomplete-container">
-                    <Input
-                      placeholder="메뉴를 입력하거나 아래에서 선택하세요"
-                      value={mealName}
-                      onChange={handleInputChange}
-                      onKeyDown={handleKeyDown}
-                      onFocus={() => setShowAutocomplete(true)}
-                      className="pr-10"
-                    />
-                    {mealName && (
+                    <div className="flex space-x-2">
+                      <div className="relative flex-1">
+                        <Input
+                          placeholder="메뉴를 입력하거나 아래에서 선택하세요"
+                          value={mealName}
+                          onChange={handleInputChange}
+                          onKeyUp={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              // 엔터키 플래그 설정
+                              setLastEnterPressed(true);
+                            }
+                          }}
+                          onBlur={() => {
+                            // 포커스를 잃을 때 자동완성 닫기
+                            setShowAutocomplete(false);
+                          }}
+
+
+                          onFocus={() => setShowAutocomplete(true)}
+                          className="pr-10"
+                        />
+                        {mealName && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setMealName("")}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-gray-100 text-gray-500"
+                          >
+                            ×
+                          </Button>
+                        )}
+                      </div>
                       <Button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setMealName("")}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-gray-100"
+                        onClick={handleAddToTempList}
+                        disabled={!mealName.trim()}
+                        className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                       >
-                        ×
+                        ✓
                       </Button>
-                    )}
+                    </div>
                     
                     {/* 자동완성 드롭다운 */}
                     {showAutocomplete && mealName.length >= 1 && filteredAutocomplete.length > 0 && (
@@ -1046,6 +1350,35 @@ export default function FamilyMealsPage() {
                       </div>
                     )}
                   </div>
+                  {/* 임시 메뉴 리스트 */}
+                  <div className="mt-4">
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      선택된 식단 (임시)
+                    </label>
+                    {tempMenuList.length > 0 ? (
+                      <div className="space-y-2">
+                        {tempMenuList.map((menu, index) => (
+                          <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded-lg">
+                            <span className="text-sm text-gray-700">{menu}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeFromTempList(menu)}
+                              className="h-6 w-6 p-0 hover:bg-red-100 text-red-500"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-400 text-center py-4 bg-gray-50 rounded-lg">
+                        메뉴를 추가해주세요
+                      </div>
+                    )}
+                  </div>
+                  
                   <div className="text-xs text-gray-500 mb-2">기존 메뉴에서 선택:</div>
                   <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                     {availableMeals.map((meal) => (
