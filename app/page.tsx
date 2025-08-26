@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, List, Clock, ChefHat } from "lucide-react";
 import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import { schedulesApi, familyMealsApi, mealsApi, recipesApi, Schedule } from "@/lib/supabase-client";
 import Link from "next/link";
 
@@ -809,7 +810,7 @@ export default function Home() {
                     <div className="text-lg font-medium text-gray-800">
                       {(() => {
                         const today = new Date();
-                        const todayKey = today.toISOString().split('T')[0];
+                        const todayKey = format(today, 'yyyy-MM-dd');
                         const todayMeal = familyMeals.find(fm => fm.date === todayKey);
                         return todayMeal?.breakfast || '등록된 식단이 없습니다';
                       })()}
@@ -828,7 +829,7 @@ export default function Home() {
                     <div className="text-lg font-medium text-gray-800">
                       {(() => {
                         const today = new Date();
-                        const todayKey = today.toISOString().split('T')[0];
+                        const todayKey = format(today, 'yyyy-MM-dd');
                         const todayMeal = familyMeals.find(fm => fm.date === todayKey);
                         return todayMeal?.lunch || '등록된 식단이 없습니다';
                       })()}
@@ -847,7 +848,7 @@ export default function Home() {
                     <div className="text-lg font-medium text-gray-800">
                       {(() => {
                         const today = new Date();
-                        const todayKey = today.toISOString().split('T')[0];
+                        const todayKey = format(today, 'yyyy-MM-dd');
                         const todayMeal = familyMeals.find(fm => fm.date === todayKey);
                         return todayMeal?.dinner || '등록된 식단이 없습니다';
                       })()}
