@@ -95,6 +95,48 @@ CREATE TRIGGER update_recipes_updated_at BEFORE UPDATE ON recipes
 CREATE TRIGGER update_schedules_updated_at BEFORE UPDATE ON schedules
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Create supplies table (생필품)
+CREATE TABLE IF NOT EXISTS supplies (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    title VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT,
+    images JSONB DEFAULT '[]'::jsonb,
+    howto TEXT,
+    buy_date DATE,
+    remain_count INTEGER DEFAULT 0,
+    deposit_description TEXT,
+    deposit_images JSONB DEFAULT '[]'::jsonb,
+    buy_information TEXT,
+    is_delete BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create supplies_history table (생필품 이력)
+CREATE TABLE IF NOT EXISTS supplies_history (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    supply_title VARCHAR(255) NOT NULL,
+    description TEXT,
+    images JSONB DEFAULT '[]'::jsonb,
+    howto TEXT,
+    buy_date DATE,
+    remain_count INTEGER,
+    deposit_description TEXT,
+    deposit_images JSONB DEFAULT '[]'::jsonb,
+    buy_information TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    FOREIGN KEY (supply_title) REFERENCES supplies(title) ON DELETE CASCADE
+);
+
+-- Create indexes for supplies
+CREATE INDEX IF NOT EXISTS idx_supplies_title ON supplies(title);
+CREATE INDEX IF NOT EXISTS idx_supplies_is_delete ON supplies(is_delete);
+CREATE INDEX IF NOT EXISTS idx_supplies_history_supply_title ON supplies_history(supply_title);
+
+-- Create trigger for supplies updated_at
+CREATE TRIGGER update_supplies_updated_at BEFORE UPDATE ON supplies
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Insert sample data
 INSERT INTO meals (meal_name, family_preference, status) VALUES
     ('김치찌개', 'Good', true),

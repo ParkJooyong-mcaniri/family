@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Calendar, List, ChefHat, Home, Clock } from "lucide-react";
+import { Calendar, List, ChefHat, Home, Clock, Package } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -33,6 +33,11 @@ export function Navigation() {
       href: "/schedule",
       label: "일정 관리",
       icon: Clock,
+    },
+    {
+      href: "/supplies",
+      label: "생필품",
+      icon: Package,
     },
   ];
 

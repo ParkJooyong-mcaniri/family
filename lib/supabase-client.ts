@@ -146,6 +146,36 @@ export interface ScheduleCompletion {
   created_at: string
 }
 
+export interface Supply {
+  id: string
+  title: string
+  description?: string
+  images: string[]
+  howto?: string
+  buy_date?: string
+  remain_count?: number
+  deposit_description?: string
+  deposit_images: string[]
+  buy_information?: string
+  is_delete: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface SupplyHistory {
+  id: string
+  supply_title: string
+  description?: string
+  images: string[]
+  howto?: string
+  buy_date?: string
+  remain_count?: number
+  deposit_description?: string
+  deposit_images: string[]
+  buy_information?: string
+  created_at: string
+}
+
 // Database functions
 export const mealsApi = {
   // Get all meals
@@ -1088,5 +1118,150 @@ export const storageApi = {
       console.error('이미지 삭제 중 예외 발생:', error);
       throw error;
     }
+  }
+}
+
+export const suppliesApi = {
+  // Get all supplies (not deleted)
+  async getAll() {
+    const { data, error } = await supabase
+      .from('supplies')
+      .select('*')
+      .eq('is_delete', false)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data as Supply[]
+  },
+
+  // Get supply by id
+  async getById(id: string) {
+    const { data, error } = await supabase
+      .from('supplies')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) throw error
+    return data as Supply
+  },
+
+  // Get supply by title
+  async getByTitle(title: string) {
+    const { data, error } = await supabase
+      .from('supplies')
+      .select('*')
+      .eq('title', title)
+      .eq('is_delete', false)
+      .single()
+    
+    if (error && error.code !== 'PGRST116') throw error
+    return data as Supply | null
+  },
+
+  // Search supplies
+  async search(searchTerm: string) {
+    const { data, error } = await supabase
+      .from('supplies')
+      .select('*')
+      .eq('is_delete', false)
+      .or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data as Supply[]
+  },
+
+  // Create new supply
+  async create(supply: Omit<Supply, 'id' | 'created_at' | 'updated_at' | 'is_delete'>) {
+    const { data, error } = await supabase
+      .from('supplies')
+      .insert([{
+        ...supply,
+        is_delete: false
+      }])
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Supply
+  },
+
+  // Update supply (creates history before update)
+  async update(title: string, updates: Partial<Omit<Supply, 'id' | 'title' | 'created_at' | 'updated_at'>>) {
+    // Get current supply data
+    const currentSupply = await this.getByTitle(title)
+    if (!currentSupply) {
+      throw new Error('Supply not found')
+    }
+
+    // Save current data to history before update
+    const { error: historyError } = await supabase
+      .from('supplies_history')
+      .insert([{
+        supply_title: currentSupply.title,
+        description: currentSupply.description,
+        images: currentSupply.images,
+        howto: currentSupply.howto,
+        buy_date: currentSupply.buy_date,
+        remain_count: currentSupply.remain_count,
+        deposit_description: currentSupply.deposit_description,
+        deposit_images: currentSupply.deposit_images,
+        buy_information: currentSupply.buy_information
+      }])
+    
+    if (historyError) {
+      console.error('History save failed:', historyError)
+      // Continue with update even if history save fails
+    }
+
+    // Update supply (title cannot be updated)
+    const { data, error } = await supabase
+      .from('supplies')
+      .update(updates)
+      .eq('title', title)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Supply
+  },
+
+  // Update only remain_count (for quick update)
+  async updateRemainCount(title: string, remain_count: number) {
+    const { data, error } = await supabase
+      .from('supplies')
+      .update({ remain_count })
+      .eq('title', title)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Supply
+  },
+
+  // Soft delete supply
+  async delete(title: string) {
+    const { data, error } = await supabase
+      .from('supplies')
+      .update({ is_delete: true })
+      .eq('title', title)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Supply
+  },
+
+  // Get supply history
+  async getHistory(title: string) {
+    const { data, error } = await supabase
+      .from('supplies_history')
+      .select('*')
+      .eq('supply_title', title)
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    return data as SupplyHistory[]
   }
 } 
