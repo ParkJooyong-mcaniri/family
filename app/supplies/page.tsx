@@ -47,6 +47,7 @@ export default function SuppliesPage() {
   // 데이터 로드
   useEffect(() => {
     loadSupplies();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSupplies = async () => {
@@ -158,14 +159,14 @@ export default function SuppliesPage() {
       if (editingSupply) {
         // 수정 시 이력 저장됨 (API에서 처리)
         await suppliesApi.update(editingSupply.title, {
-          description: formData.description || null,
+          description: formData.description || undefined,
           images: formData.images,
-          howto: formData.howto || null,
-          buy_date: formData.buy_date || null,
+          howto: formData.howto || undefined,
+          buy_date: formData.buy_date || undefined,
           remain_count: formData.remain_count,
-          deposit_description: formData.deposit_description || null,
+          deposit_description: formData.deposit_description || undefined,
           deposit_images: formData.deposit_images,
-          buy_information: formData.buy_information || null,
+          buy_information: formData.buy_information || undefined,
         });
         toast({
           title: "성공",
@@ -174,14 +175,14 @@ export default function SuppliesPage() {
       } else {
         await suppliesApi.create({
           title: formData.title,
-          description: formData.description || null,
+          description: formData.description || undefined,
           images: formData.images,
-          howto: formData.howto || null,
-          buy_date: formData.buy_date || null,
+          howto: formData.howto || undefined,
+          buy_date: formData.buy_date || undefined,
           remain_count: formData.remain_count,
-          deposit_description: formData.deposit_description || null,
+          deposit_description: formData.deposit_description || undefined,
           deposit_images: formData.deposit_images,
-          buy_information: formData.buy_information || null,
+          buy_information: formData.buy_information || undefined,
         });
         toast({
           title: "성공",
@@ -191,11 +192,12 @@ export default function SuppliesPage() {
       await loadSupplies();
       setIsDialogOpen(false);
       resetForm();
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to save supply:', error);
+      const errorMessage = error instanceof Error ? error.message : "생필품 저장에 실패했습니다.";
       toast({
         title: "오류",
-        description: error.message || "생필품 저장에 실패했습니다.",
+        description: errorMessage,
         variant: "destructive",
       });
     }
