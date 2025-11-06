@@ -43,20 +43,20 @@ export function Navigation() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 md:top-0 md:bottom-auto md:border-b md:border-t-0">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex justify-around md:justify-start md:space-x-8">
+      <div className="max-w-7xl mx-auto px-2 md:px-4">
+        <div className="flex overflow-x-auto md:justify-start md:space-x-8 scrollbar-hide">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             
             return (
-              <Link key={item.href} href={item.href}>
+              <Link key={item.href} href={item.href} className="flex-shrink-0">
                 <Button
                   variant={isActive ? "default" : "ghost"}
-                  className="flex flex-col items-center justify-center h-16 w-full md:h-12 md:w-auto md:flex-row md:space-x-2"
+                  className="flex flex-col items-center justify-center h-14 min-w-[60px] px-2 md:h-12 md:w-auto md:flex-row md:space-x-2 md:min-w-0"
                 >
-                  <Icon className="h-5 w-5 md:h-4 md:w-4" />
-                  <span className="text-xs md:text-sm">{item.label}</span>
+                  <Icon className="h-4 w-4 md:h-4 md:w-4" />
+                  <span className="text-[10px] leading-tight mt-0.5 md:text-sm md:mt-0">{item.label}</span>
                 </Button>
               </Link>
             );
